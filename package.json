@@ -1,0 +1,32 @@
+{
+	"name": "agenticscribe",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"packageManager": "npm@11.13.0",
+	"engines": {
+		"node": ">=24.18.0 <25",
+		"npm": ">=11 <12"
+	},
+	"scripts": {
+		"dev": "vite",
+		"build": "tsc --noEmit && vite build",
+		"preview": "vite preview",
+		"check": "tsc --noEmit",
+		"test:unit": "vitest run",
+		"test:coverage": "vitest run --coverage",
+		"test:e2e": "playwright test",
+		"verify": "npm run check && npm run test:coverage && npm run build && npm run test:e2e"
+	},
+	"dependencies": {
+		"dexie": "^4.4.4"
+	},
+	"devDependencies": {
+		"@playwright/test": "^1.60.0",
+		"@vitest/coverage-v8": "^4.1.10",
+		"fake-indexeddb": "^6.2.5",
+		"typescript": "^6.0.3",
+		"vite": "^8.0.16",
+		"vitest": "^4.1.8"
+	}
+}

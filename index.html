@@ -1,0 +1,1186 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>AgenticScribe — Note</title>
+		<style>
+			:root {
+				color-scheme: light;
+				--desk: #d8d0c2;
+				--paper: #fbf8f0;
+				--ink: #282621;
+				--muted: #756f64;
+				--rule: rgba(66, 91, 106, 0.12);
+				--margin: rgba(166, 69, 53, 0.34);
+				--saved: #356b52;
+				--sidebar: #252b28;
+				--sidebar-ink: #f1eee5;
+				--sidebar-muted: #aaa99f;
+				--sidebar-hover: rgba(255, 255, 255, 0.07);
+				--sidebar-active: #3c4942;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			html,
+			body {
+				margin: 0;
+				min-height: 100%;
+			}
+
+			button {
+				font: inherit;
+			}
+
+			.app-shell {
+				display: grid;
+				grid-template-columns: 276px minmax(0, 1fr);
+				min-height: 100vh;
+			}
+
+			.sidebar {
+				position: relative;
+				z-index: 5;
+				display: flex;
+				min-height: 100vh;
+				flex-direction: column;
+				background:
+					radial-gradient(circle at 20% 0, rgba(255, 255, 255, 0.06), transparent 18rem),
+					var(--sidebar);
+				padding: 25px 17px 18px;
+				color: var(--sidebar-ink);
+				box-shadow: 8px 0 28px rgba(43, 37, 29, 0.12);
+			}
+
+			.brand {
+				margin: 0 10px 24px;
+				font-size: 22px;
+				font-weight: normal;
+				letter-spacing: -0.025em;
+			}
+
+			.new-note {
+				width: 100%;
+				margin-bottom: 24px;
+				border: 1px solid rgba(255, 255, 255, 0.2);
+				border-radius: 8px;
+				background: var(--sidebar-ink);
+				padding: 10px 13px;
+				color: var(--sidebar);
+				text-align: left;
+				cursor: pointer;
+				transition: transform 140ms ease, background 140ms ease;
+			}
+
+			.new-note:hover {
+				background: #fffdf6;
+				transform: translateY(-1px);
+			}
+
+			.new-note:focus-visible,
+			.sidebar-item:focus-visible,
+			.note-link:focus-visible,
+			.sidebar-toggle:focus-visible {
+				outline: 2px solid #c7b895;
+				outline-offset: 2px;
+			}
+
+			.sidebar-section {
+				margin-bottom: 21px;
+			}
+
+			.section-label {
+				margin: 0 10px 7px;
+				color: var(--sidebar-muted);
+				font: 10px/1.4 ui-monospace, 'Cascadia Mono', monospace;
+				letter-spacing: 0.13em;
+				text-transform: uppercase;
+			}
+
+			.folder-heading {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				margin: 0 3px 5px 10px;
+			}
+
+			.folder-heading .section-label {
+				margin: 0;
+			}
+
+			.add-root-folder,
+			.folder-action {
+				display: grid;
+				width: 25px;
+				height: 25px;
+				place-items: center;
+				border: 0;
+				border-radius: 5px;
+				background: transparent;
+				color: var(--sidebar-muted);
+				cursor: pointer;
+			}
+
+			.add-root-folder:hover,
+			.folder-action:hover,
+			.add-root-folder:focus-visible,
+			.folder-action:focus-visible {
+				background: var(--sidebar-hover);
+				color: var(--sidebar-ink);
+				outline: 0;
+			}
+
+			.folder-row {
+				display: flex;
+				align-items: center;
+			}
+
+			.folder-row .sidebar-item {
+				min-width: 0;
+				flex: 1;
+			}
+
+			.folder-actions {
+				display: flex;
+				width: 50px;
+				opacity: 0.38;
+				transition: opacity 120ms ease;
+			}
+
+			.folder-row:hover .folder-actions,
+			.folder-row:focus-within .folder-actions {
+				opacity: 1;
+			}
+
+			.folder-action {
+				width: 24px;
+				font-size: 12px;
+			}
+
+			.folder-form {
+				display: flex;
+				align-items: center;
+				gap: 5px;
+				padding: 4px 4px 4px calc(10px + var(--folder-depth, 0) * 18px);
+			}
+
+			.folder-form input {
+				min-width: 0;
+				flex: 1;
+				border: 1px solid rgba(255, 255, 255, 0.2);
+				border-radius: 5px;
+				background: rgba(0, 0, 0, 0.14);
+				padding: 6px 7px;
+				color: var(--sidebar-ink);
+				font: 13px/1.2 Georgia, 'Times New Roman', serif;
+			}
+
+			.folder-form input:focus {
+				border-color: #c7b895;
+				outline: 0;
+			}
+
+			.folder-form button {
+				border: 0;
+				border-radius: 5px;
+				background: var(--sidebar-hover);
+				padding: 6px 7px;
+				color: var(--sidebar-ink);
+				font-size: 11px;
+				cursor: pointer;
+			}
+
+			.sidebar-item,
+			.note-link {
+				display: flex;
+				width: 100%;
+				align-items: center;
+				gap: 9px;
+				border: 0;
+				border-radius: 6px;
+				background: transparent;
+				padding: 7px 10px;
+				color: var(--sidebar-ink);
+				font-size: 14px;
+				line-height: 1.3;
+				text-align: left;
+				cursor: pointer;
+			}
+
+			.sidebar-item:hover,
+			.note-link:hover {
+				background: var(--sidebar-hover);
+			}
+
+			.sidebar-item.active,
+			.note-link.active {
+				background: var(--sidebar-active);
+			}
+
+			.sidebar-item.drop-target {
+				background: rgba(199, 184, 149, 0.18);
+				box-shadow: inset 0 0 0 1px #c7b895;
+			}
+
+			.sidebar-item .count {
+				margin-left: auto;
+				color: var(--sidebar-muted);
+				font: 11px/1 ui-monospace, 'Cascadia Mono', monospace;
+			}
+
+			.folder-mark {
+				width: 13px;
+				color: #c8b88f;
+				font-size: 11px;
+			}
+
+			.depth-1 {
+				padding-left: 29px;
+			}
+
+			.depth-2 {
+				padding-left: 47px;
+			}
+
+			.note-link {
+				min-width: 0;
+				flex: 1;
+				align-items: flex-start;
+				color: #e3dfd4;
+			}
+
+			.note-link.dragging {
+				opacity: 0.45;
+			}
+
+			.note-link::before {
+				margin-top: 6px;
+				width: 5px;
+				height: 5px;
+				flex: 0 0 auto;
+				border-radius: 50%;
+				background: #b46f5d;
+				content: '';
+			}
+
+			.note-title {
+				overflow: hidden;
+				white-space: nowrap;
+				text-overflow: ellipsis;
+			}
+
+			.note-title-wrap {
+				display: flex;
+				min-width: 0;
+				flex: 1;
+				align-items: baseline;
+				gap: 7px;
+			}
+
+			.unsaved-mark {
+				flex: 0 0 auto;
+				color: var(--sidebar-muted);
+				font: 9px/1 ui-monospace, 'Cascadia Mono', monospace;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+			}
+
+			.note-row {
+				position: relative;
+				display: flex;
+				align-items: center;
+				gap: 3px;
+			}
+
+			.note-menu-button {
+				width: 28px;
+				height: 28px;
+				flex: 0 0 auto;
+				border: 0;
+				border-radius: 6px;
+				background: transparent;
+				color: var(--sidebar-muted);
+				cursor: pointer;
+			}
+
+			.note-menu-button:hover,
+			.note-menu-button[aria-expanded='true'] {
+				background: var(--sidebar-hover);
+				color: var(--sidebar-ink);
+			}
+
+			.move-menu {
+				position: absolute;
+				z-index: 8;
+				top: 34px;
+				right: 0;
+				width: 188px;
+				border: 1px solid rgba(255, 255, 255, 0.13);
+				border-radius: 8px;
+				background: #343b37;
+				padding: 6px;
+				box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
+			}
+
+			.move-menu[hidden],
+			.note-row[hidden],
+			.empty-location[hidden] {
+				display: none;
+			}
+
+			.move-menu-title {
+				margin: 4px 7px 5px;
+				color: var(--sidebar-muted);
+				font: 10px/1.4 ui-monospace, 'Cascadia Mono', monospace;
+				letter-spacing: 0.1em;
+				text-transform: uppercase;
+			}
+
+			.move-option {
+				display: block;
+				width: 100%;
+				border: 0;
+				border-radius: 5px;
+				background: transparent;
+				padding: 7px 8px;
+				color: var(--sidebar-ink);
+				font-size: 13px;
+				text-align: left;
+				cursor: pointer;
+			}
+
+			.move-option:hover,
+			.move-option:focus-visible {
+				background: var(--sidebar-hover);
+				outline: 0;
+			}
+
+			.menu-divider {
+				height: 1px;
+				margin: 6px 5px;
+				border: 0;
+				background: rgba(255, 255, 255, 0.12);
+			}
+
+			.delete-option {
+				color: #efb2a5;
+			}
+
+			.delete-option:hover,
+			.delete-option:focus-visible {
+				background: rgba(180, 75, 58, 0.18);
+			}
+
+			.confirm-dialog {
+				width: min(calc(100% - 32px), 420px);
+				border: 1px solid rgba(72, 62, 48, 0.18);
+				border-radius: 12px;
+				background: var(--paper);
+				padding: 0;
+				color: var(--ink);
+				box-shadow: 0 28px 80px rgba(35, 31, 26, 0.34);
+			}
+
+			.confirm-dialog::backdrop {
+				background: rgba(29, 32, 30, 0.58);
+				backdrop-filter: blur(3px);
+			}
+
+			.confirm-content {
+				padding: 28px 28px 24px;
+			}
+
+			.confirm-eyebrow {
+				margin: 0 0 10px;
+				color: #984839;
+				font: 10px/1.4 ui-monospace, 'Cascadia Mono', monospace;
+				letter-spacing: 0.13em;
+				text-transform: uppercase;
+			}
+
+			.confirm-dialog h2 {
+				margin: 0 0 12px;
+				font-size: 25px;
+				font-weight: normal;
+				letter-spacing: -0.02em;
+			}
+
+			.confirm-copy {
+				margin: 0;
+				color: var(--muted);
+				font-size: 15px;
+				line-height: 1.5;
+			}
+
+			.confirm-copy strong {
+				color: var(--ink);
+				font-weight: normal;
+			}
+
+			.confirm-actions {
+				display: flex;
+				justify-content: flex-end;
+				gap: 9px;
+				margin-top: 24px;
+			}
+
+			.confirm-actions button {
+				border: 1px solid rgba(72, 62, 48, 0.18);
+				border-radius: 7px;
+				background: transparent;
+				padding: 9px 14px;
+				color: var(--ink);
+				cursor: pointer;
+			}
+
+			.confirm-actions button:hover,
+			.confirm-actions button:focus-visible {
+				background: rgba(72, 62, 48, 0.06);
+				outline: 2px solid #c7b895;
+				outline-offset: 2px;
+			}
+
+			.confirm-actions .confirm-delete {
+				border-color: #914434;
+				background: #914434;
+				color: #fffaf2;
+			}
+
+			.confirm-actions .confirm-delete:hover,
+			.confirm-actions .confirm-delete:focus-visible {
+				background: #7f382b;
+			}
+
+			.empty-location {
+				margin: 7px 10px;
+				color: var(--sidebar-muted);
+				font-size: 12px;
+				font-style: italic;
+			}
+
+			.workspace {
+				position: relative;
+				min-width: 0;
+				min-height: 100vh;
+			}
+
+			body {
+				background:
+					radial-gradient(circle at 18% 4%, rgba(255, 255, 255, 0.44), transparent 29rem),
+					linear-gradient(135deg, #e1d9ca, var(--desk));
+				color: var(--ink);
+				font-family: Georgia, 'Times New Roman', serif;
+			}
+
+			.note {
+				position: relative;
+				min-height: 100vh;
+				width: min(100%, 920px);
+				margin: 0 auto;
+				background:
+					linear-gradient(90deg, transparent 0 72px, var(--margin) 72px 73px, transparent 73px),
+					repeating-linear-gradient(
+						to bottom,
+						transparent 0,
+						transparent 35px,
+						var(--rule) 35px,
+						var(--rule) 36px
+					),
+					var(--paper);
+				box-shadow: 0 0 0 1px rgba(72, 62, 48, 0.08), 0 24px 70px rgba(54, 45, 34, 0.16);
+			}
+
+			.note::after {
+				position: absolute;
+				inset: 0;
+				pointer-events: none;
+				content: '';
+				opacity: 0.22;
+				background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.13'/%3E%3C/svg%3E");
+			}
+
+			#editor {
+				position: relative;
+				z-index: 1;
+				display: block;
+				width: 100%;
+				min-height: calc(100vh - 54px);
+				margin: 0;
+				border: 0;
+				outline: 0;
+				resize: none;
+				overflow: hidden;
+				background: transparent;
+				padding: 72px 70px 100px 96px;
+				color: var(--ink);
+				caret-color: #8f3e31;
+				font: 21px/36px Georgia, 'Times New Roman', serif;
+				letter-spacing: 0.003em;
+			}
+
+			#editor::placeholder {
+				color: #918a7e;
+				font-style: italic;
+				opacity: 1;
+			}
+
+			.capture-state {
+				position: absolute;
+				z-index: 2;
+				left: 50%;
+				bottom: 18px;
+				display: flex;
+				align-items: center;
+				gap: 9px;
+				width: min(calc(100% - 32px), 872px);
+				transform: translateX(-50%);
+				color: var(--muted);
+				font: 12px/1.2 ui-monospace, 'Cascadia Mono', monospace;
+				letter-spacing: 0.02em;
+				pointer-events: none;
+			}
+
+			.sidebar-toggle {
+				display: none;
+			}
+
+			.capture-state::before {
+				width: 7px;
+				height: 7px;
+				border-radius: 50%;
+				background: currentColor;
+				content: '';
+				transition: background 160ms ease, transform 160ms ease;
+			}
+
+			.capture-state.saved {
+				color: var(--saved);
+			}
+
+			.capture-state.saved::before {
+				transform: scale(1.35);
+			}
+
+			.shortcut {
+				margin-left: auto;
+			}
+
+			@media (max-width: 760px) {
+				.app-shell {
+					display: block;
+				}
+
+				.sidebar {
+					position: fixed;
+					inset: 0 auto 0 0;
+					width: min(82vw, 290px);
+					transform: translateX(-105%);
+					transition: transform 180ms ease;
+				}
+
+				body.sidebar-open .sidebar {
+					transform: translateX(0);
+				}
+
+				.sidebar-toggle {
+					position: fixed;
+					z-index: 4;
+					top: 12px;
+					left: 12px;
+					display: grid;
+					width: 36px;
+					height: 36px;
+					place-items: center;
+					border: 1px solid rgba(72, 62, 48, 0.18);
+					border-radius: 50%;
+					background: rgba(251, 248, 240, 0.9);
+					color: var(--ink);
+					cursor: pointer;
+					backdrop-filter: blur(10px);
+				}
+
+				.note {
+					background:
+						linear-gradient(90deg, transparent 0 36px, var(--margin) 36px 37px, transparent 37px),
+						repeating-linear-gradient(
+							to bottom,
+							transparent 0,
+							transparent 31px,
+							var(--rule) 31px,
+							var(--rule) 32px
+						),
+						var(--paper);
+				}
+
+				#editor {
+					padding: 48px 24px 96px 52px;
+					font-size: 18px;
+					line-height: 32px;
+				}
+
+				.capture-state {
+					bottom: 12px;
+					width: calc(100% - 28px);
+				}
+
+				.shortcut {
+					display: none;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div class="app-shell">
+			<aside class="sidebar" aria-label="Notebook organization">
+				<h1 class="brand">AgenticScribe</h1>
+				<button class="new-note" id="new-note" type="button">＋ New note</button>
+
+				<nav aria-label="Notes and folders">
+					<section class="sidebar-section">
+						<button class="sidebar-item active" type="button" data-location="scratchpad">
+							<span aria-hidden="true">⌂</span>
+							Scratchpad
+							<span class="count" id="scratchpad-count">1</span>
+						</button>
+					</section>
+
+					<section class="sidebar-section" aria-labelledby="folders-label">
+						<div class="folder-heading">
+							<h2 class="section-label" id="folders-label">Folders</h2>
+							<button class="add-root-folder" id="add-root-folder" type="button" aria-label="New folder">＋</button>
+						</div>
+						<div id="folder-list"></div>
+					</section>
+
+				<section class="sidebar-section" aria-labelledby="notes-label">
+						<h2 class="section-label" id="notes-label"><span id="location-name">Scratchpad</span> notes</h2>
+						<div id="notes-list"></div>
+						<p class="empty-location" id="empty-location" hidden>No notes here yet.</p>
+					</section>
+				</nav>
+			</aside>
+
+			<button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Open folders">
+				☰
+			</button>
+
+			<div class="workspace">
+				<main class="note" aria-label="Note">
+					<textarea
+						id="editor"
+						autofocus
+						spellcheck="true"
+						aria-label="Continuous note"
+						placeholder="Start with a thought…"
+					></textarea>
+				</main>
+				<div class="capture-state" id="capture-state" role="status" aria-live="polite">
+					<span id="state-text">Nothing saved yet</span>
+					<span class="shortcut">Enter saves thought · Shift + Enter adds a line</span>
+				</div>
+			</div>
+		</div>
+
+		<dialog class="confirm-dialog" id="delete-dialog" aria-labelledby="delete-dialog-title">
+			<div class="confirm-content">
+				<p class="confirm-eyebrow">Permanent action</p>
+				<h2 id="delete-dialog-title">Delete this note?</h2>
+				<p class="confirm-copy"><strong id="delete-note-name"></strong> will be removed from this device.</p>
+				<div class="confirm-actions">
+					<button id="cancel-delete" type="button">Keep note</button>
+					<button class="confirm-delete" id="confirm-delete" type="button">Delete note</button>
+				</div>
+			</div>
+		</dialog>
+
+		<script type="module">
+			import { NotebookStore } from '/src/notebook-store.ts';
+
+			const editor = document.querySelector('#editor');
+			const state = document.querySelector('#capture-state');
+			const stateText = document.querySelector('#state-text');
+			const newNote = document.querySelector('#new-note');
+			const sidebarToggle = document.querySelector('#sidebar-toggle');
+			const notesList = document.querySelector('#notes-list');
+			const emptyLocation = document.querySelector('#empty-location');
+			const locationName = document.querySelector('#location-name');
+			const scratchpadCount = document.querySelector('#scratchpad-count');
+			const folderList = document.querySelector('#folder-list');
+			const addRootFolder = document.querySelector('#add-root-folder');
+			const deleteDialog = document.querySelector('#delete-dialog');
+			const deleteNoteName = document.querySelector('#delete-note-name');
+			const cancelDelete = document.querySelector('#cancel-delete');
+			const confirmDelete = document.querySelector('#confirm-delete');
+			const store = new NotebookStore({ databaseName: 'agenticscribe' });
+			let folders = await store.listFolders();
+			let notes = (await store.listNotes()).map((note) => ({
+				id: note.id,
+				savedText: note.text,
+				location: note.location,
+				persisted: true
+			}));
+			const drafts = new Map(notes.map((note) => [note.id, note.savedText]));
+			let activeNoteId = notes[0]?.id;
+			let selectedLocation = notes[0]?.location ?? 'scratchpad';
+			let creatingParentId;
+			let renamingFolderId;
+			let stateTimer;
+			let pendingDeleteNoteId;
+			let deleteReturnFocus;
+
+			function createId() {
+				return `note-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+			}
+
+			function activeNote() {
+				return notes.find((note) => note.id === activeNoteId);
+			}
+
+			function currentText(note) {
+				return drafts.get(note.id) ?? note.savedText;
+			}
+
+			function noteTitle(note) {
+				return currentText(note).split('\n').map((line) => line.trim()).find(Boolean) || 'Untitled note';
+			}
+
+			function locationLabel(id) {
+				if (id === 'scratchpad') return 'Scratchpad';
+				return folders.find((folder) => folder.id === id)?.name ?? 'Scratchpad';
+			}
+
+			function folderDepth(folder) {
+				let depth = 0;
+				let parentId = folder.parentId;
+				while (parentId && depth < 8) {
+					depth += 1;
+					parentId = folders.find((candidate) => candidate.id === parentId)?.parentId ?? null;
+				}
+				return depth;
+			}
+
+			function orderedFolders(parentId = null) {
+				return folders
+					.filter((folder) => folder.parentId === parentId)
+					.flatMap((folder) => [folder, ...orderedFolders(folder.id)]);
+			}
+
+			function createFolderForm(parentId, depth, existingFolder) {
+				const form = document.createElement('form');
+				form.className = 'folder-form';
+				form.style.paddingLeft = `${10 + depth * 18}px`;
+				const input = document.createElement('input');
+				input.type = 'text';
+				input.maxLength = 40;
+				input.required = true;
+				input.setAttribute('aria-label', existingFolder ? `Rename ${existingFolder.name}` : 'Folder name');
+				input.placeholder = existingFolder ? '' : 'Folder name';
+				input.value = existingFolder?.name ?? '';
+				const save = document.createElement('button');
+				save.type = 'submit';
+				save.textContent = 'Save';
+				const cancel = document.createElement('button');
+				cancel.type = 'button';
+				cancel.textContent = 'Cancel';
+				cancel.addEventListener('click', () => {
+					creatingParentId = undefined;
+					renamingFolderId = undefined;
+					renderFolders();
+				});
+				form.addEventListener('submit', async (event) => {
+					event.preventDefault();
+					const name = input.value.trim();
+					const duplicate = folders.some((folder) =>
+						folder.id !== existingFolder?.id &&
+						folder.parentId === parentId &&
+						folder.name.toLocaleLowerCase() === name.toLocaleLowerCase()
+					);
+					if (!name || duplicate) {
+						input.setCustomValidity(duplicate ? 'A folder with that name already exists here.' : 'Enter a folder name.');
+						input.reportValidity();
+						return;
+					}
+					if (existingFolder) await store.renameFolder(existingFolder.id, name);
+					else await store.createFolder({ id: `folder-${crypto.randomUUID()}`, name, parentId });
+					folders = await store.listFolders();
+					creatingParentId = undefined;
+					renamingFolderId = undefined;
+					renderFolders();
+				});
+				input.addEventListener('keydown', (event) => {
+					if (event.key === 'Escape') {
+						event.preventDefault();
+						creatingParentId = undefined;
+						renamingFolderId = undefined;
+						renderFolders();
+					}
+				});
+				form.append(input, save, cancel);
+				requestAnimationFrame(() => {
+					input.focus();
+					input.select();
+				});
+				return form;
+			}
+
+			function closeMoveMenus(except) {
+				document.querySelectorAll('.move-menu').forEach((menu) => {
+					if (menu !== except) menu.hidden = true;
+				});
+				document.querySelectorAll('.note-menu-button').forEach((button) => {
+					if (!except || button.nextElementSibling !== except) button.setAttribute('aria-expanded', 'false');
+				});
+			}
+
+			function attachLocationBehavior(button) {
+				button.addEventListener('click', () => {
+					selectedLocation = button.dataset.location;
+					closeMoveMenus();
+					renderLocation();
+				});
+				button.addEventListener('dragover', (event) => {
+					event.preventDefault();
+					button.classList.add('drop-target');
+				});
+				button.addEventListener('dragleave', () => button.classList.remove('drop-target'));
+				button.addEventListener('drop', (event) => {
+					event.preventDefault();
+					button.classList.remove('drop-target');
+					const noteId = event.dataTransfer.getData('text/plain').replace(/^note:/, '');
+					if (noteId) moveNote(noteId, button.dataset.location);
+				});
+			}
+
+			function renderFolders() {
+				folderList.replaceChildren();
+				if (creatingParentId === null) folderList.append(createFolderForm(null, 0));
+				for (const folder of orderedFolders()) {
+					const depth = folderDepth(folder);
+					if (renamingFolderId === folder.id) {
+						folderList.append(createFolderForm(folder.parentId, depth, folder));
+					} else {
+						const row = document.createElement('div');
+						row.className = 'folder-row';
+						const button = document.createElement('button');
+						button.className = 'sidebar-item';
+						button.type = 'button';
+						button.dataset.location = folder.id;
+						button.style.paddingLeft = `${10 + depth * 18}px`;
+						const marker = document.createElement('span');
+						marker.className = 'folder-mark';
+						marker.setAttribute('aria-hidden', 'true');
+						marker.textContent = folders.some((candidate) => candidate.parentId === folder.id) ? '▾' : '—';
+						button.append(marker, document.createTextNode(folder.name));
+						attachLocationBehavior(button);
+						const actions = document.createElement('span');
+						actions.className = 'folder-actions';
+						const addChild = document.createElement('button');
+						addChild.className = 'folder-action';
+						addChild.type = 'button';
+						addChild.textContent = '＋';
+						addChild.setAttribute('aria-label', `New folder inside ${folder.name}`);
+						addChild.addEventListener('click', () => {
+							creatingParentId = folder.id;
+							renamingFolderId = undefined;
+							renderFolders();
+						});
+						const rename = document.createElement('button');
+						rename.className = 'folder-action';
+						rename.type = 'button';
+						rename.textContent = '✎';
+						rename.setAttribute('aria-label', `Rename ${folder.name}`);
+						rename.addEventListener('click', () => {
+							renamingFolderId = folder.id;
+							creatingParentId = undefined;
+							renderFolders();
+						});
+						actions.append(addChild, rename);
+						row.append(button, actions);
+						folderList.append(row);
+					}
+					if (creatingParentId === folder.id) folderList.append(createFolderForm(folder.id, depth + 1));
+				}
+				renderLocation();
+			}
+
+			function createMoveMenu(note, button) {
+				const menu = document.createElement('div');
+				menu.className = 'move-menu';
+				menu.role = 'menu';
+				menu.hidden = true;
+				const title = document.createElement('p');
+				title.className = 'move-menu-title';
+				title.textContent = 'Move to…';
+				menu.append(title);
+				for (const location of [
+					{ id: 'scratchpad', name: 'Scratchpad', depth: 0 },
+					...orderedFolders().map((folder) => ({ id: folder.id, name: folder.name, depth: folderDepth(folder) }))
+				]) {
+					const option = document.createElement('button');
+					option.className = 'move-option';
+					option.type = 'button';
+					option.role = 'menuitem';
+					option.textContent = `${'  '.repeat(location.depth)}${location.name}`;
+					option.addEventListener('click', () => moveNote(note.id, location.id));
+					menu.append(option);
+				}
+				const divider = document.createElement('hr');
+				divider.className = 'menu-divider';
+				const deleteButton = document.createElement('button');
+				deleteButton.className = 'move-option delete-option';
+				deleteButton.type = 'button';
+				deleteButton.role = 'menuitem';
+				deleteButton.textContent = 'Delete note';
+				deleteButton.addEventListener('click', () => openDeleteDialog(note.id, button));
+				menu.append(divider, deleteButton);
+				button.addEventListener('click', (event) => {
+					event.stopPropagation();
+					const opening = menu.hidden;
+					closeMoveMenus(opening ? menu : undefined);
+					menu.hidden = !opening;
+					button.setAttribute('aria-expanded', String(opening));
+					if (opening) menu.querySelector('.move-option')?.focus();
+				});
+				return menu;
+			}
+
+			function renderNotes() {
+				notesList.replaceChildren();
+				const visibleNotes = notes.filter((note) => note.location === selectedLocation);
+				for (const note of visibleNotes) {
+					const row = document.createElement('div');
+					row.className = 'note-row';
+					const link = document.createElement('button');
+					link.className = 'note-link';
+					link.classList.toggle('active', note.id === activeNoteId);
+					link.type = 'button';
+					link.draggable = true;
+					const titleWrap = document.createElement('span');
+					titleWrap.className = 'note-title-wrap';
+					const title = document.createElement('span');
+					title.className = 'note-title';
+					title.textContent = noteTitle(note);
+					titleWrap.append(title);
+					if (!note.persisted) {
+						const unsaved = document.createElement('span');
+						unsaved.className = 'unsaved-mark';
+						unsaved.textContent = 'unsaved';
+						titleWrap.append(unsaved);
+					}
+					link.append(titleWrap);
+					link.addEventListener('click', () => selectNote(note.id));
+					link.addEventListener('dragstart', (event) => {
+						event.dataTransfer.setData('text/plain', `note:${note.id}`);
+						event.dataTransfer.effectAllowed = 'move';
+						link.classList.add('dragging');
+					});
+					link.addEventListener('dragend', () => {
+						link.classList.remove('dragging');
+						document.querySelectorAll('[data-location]').forEach((item) => item.classList.remove('drop-target'));
+					});
+					const menuButton = document.createElement('button');
+					menuButton.className = 'note-menu-button';
+					menuButton.type = 'button';
+					menuButton.setAttribute('aria-label', `Actions for ${noteTitle(note)}`);
+					menuButton.setAttribute('aria-haspopup', 'menu');
+					menuButton.setAttribute('aria-expanded', 'false');
+					menuButton.textContent = '•••';
+					row.append(link, menuButton, createMoveMenu(note, menuButton));
+					notesList.append(row);
+				}
+				emptyLocation.hidden = visibleNotes.length > 0;
+				scratchpadCount.textContent = String(notes.filter((note) => note.location === 'scratchpad').length);
+			}
+
+			function renderLocation() {
+				const validLocations = new Set(['scratchpad', ...folders.map((folder) => folder.id)]);
+				for (const note of notes) if (!validLocations.has(note.location)) note.location = 'scratchpad';
+				if (!validLocations.has(selectedLocation)) selectedLocation = 'scratchpad';
+				document.querySelectorAll('[data-location]').forEach((button) => {
+					button.classList.toggle('active', button.dataset.location === selectedLocation);
+				});
+				locationName.textContent = locationLabel(selectedLocation);
+				renderNotes();
+			}
+
+			function selectNote(noteId) {
+				const current = activeNote();
+				if (current) drafts.set(current.id, editor.value);
+				const next = notes.find((note) => note.id === noteId);
+				if (!next) return;
+				activeNoteId = noteId;
+				selectedLocation = next.location;
+				editor.value = currentText(next);
+				state.classList.remove('saved');
+				stateText.textContent = next.persisted ? 'Saved on this device' : 'Nothing saved yet';
+				renderLocation();
+				document.body.classList.remove('sidebar-open');
+				fitEditor();
+				editor.focus();
+			}
+
+			function createNewNote() {
+				const current = activeNote();
+				if (current) drafts.set(current.id, editor.value);
+				if (current && !current.persisted && !currentText(current).trim()) {
+					current.location = selectedLocation;
+					renderLocation();
+					document.body.classList.remove('sidebar-open');
+					editor.focus();
+					return;
+				}
+				const note = { id: createId(), savedText: '', location: selectedLocation, persisted: false };
+				notes.unshift(note);
+				drafts.set(note.id, '');
+				activeNoteId = note.id;
+				editor.value = '';
+				state.classList.remove('saved');
+				stateText.textContent = 'Nothing saved yet';
+				renderLocation();
+				document.body.classList.remove('sidebar-open');
+				fitEditor();
+				editor.focus();
+			}
+
+			async function moveNote(noteId, destination) {
+				const note = notes.find((candidate) => candidate.id === noteId);
+				if (!note) return;
+				note.location = destination;
+				if (note.persisted) await store.moveNote(note.id, destination);
+				selectedLocation = destination;
+				closeMoveMenus();
+				renderLocation();
+				clearTimeout(stateTimer);
+				state.classList.add('saved');
+				stateText.textContent = `Moved to ${locationLabel(destination)}`;
+				stateTimer = setTimeout(() => {
+					state.classList.remove('saved');
+					stateText.textContent = note.persisted ? 'Saved on this device' : 'Nothing saved yet';
+				}, 1100);
+			}
+
+			function openDeleteDialog(noteId, returnFocus) {
+				const note = notes.find((candidate) => candidate.id === noteId);
+				if (!note) return;
+				pendingDeleteNoteId = noteId;
+				deleteReturnFocus = returnFocus;
+				deleteNoteName.textContent = `“${noteTitle(note)}”`;
+				closeMoveMenus();
+				deleteDialog.showModal();
+				cancelDelete.focus();
+			}
+
+			function closeDeleteDialog() {
+				deleteDialog.close();
+				pendingDeleteNoteId = undefined;
+				if (deleteReturnFocus?.isConnected) deleteReturnFocus.focus();
+				deleteReturnFocus = undefined;
+			}
+
+			async function deleteNote(noteId) {
+				const index = notes.findIndex((note) => note.id === noteId);
+				if (index < 0) return;
+				const [deleted] = notes.splice(index, 1);
+				drafts.delete(noteId);
+				if (deleted.persisted) await store.deleteNote(noteId);
+				if (activeNoteId === noteId) {
+					const next = notes.find((note) => note.location === deleted.location) ?? notes[0];
+					activeNoteId = undefined;
+					if (next) selectNote(next.id);
+					else {
+						selectedLocation = deleted.location;
+						createNewNote();
+					}
+				} else {
+					renderLocation();
+				}
+				clearTimeout(stateTimer);
+				state.classList.add('saved');
+				stateText.textContent = 'Note deleted';
+				stateTimer = setTimeout(() => {
+					state.classList.remove('saved');
+					stateText.textContent = activeNote()?.persisted ? 'Saved on this device' : 'Nothing saved yet';
+				}, 1100);
+			}
+
+			function fitEditor() {
+				editor.style.height = 'auto';
+				editor.style.height = `${Math.max(window.innerHeight - 54, editor.scrollHeight)}px`;
+			}
+
+			function showSaved() {
+				clearTimeout(stateTimer);
+				state.classList.add('saved');
+				stateText.textContent = 'Thought saved on this device';
+				stateTimer = setTimeout(() => {
+					state.classList.remove('saved');
+					stateText.textContent = 'Saved on this device';
+				}, 1100);
+			}
+
+			if (!notes.length) createNewNote();
+			else {
+				editor.value = currentText(notes[0]);
+				stateText.textContent = 'Saved on this device';
+			}
+			renderFolders();
+
+			editor.addEventListener('keydown', (event) => {
+				if (event.key !== 'Enter' || event.shiftKey) return;
+				requestAnimationFrame(async () => {
+					const note = activeNote();
+					if (!note) return;
+					drafts.set(note.id, editor.value);
+					note.savedText = editor.value;
+					await store.commitNote({
+						id: note.id,
+						text: note.savedText,
+						thoughts: [{ id: `thought-${crypto.randomUUID()}`, end: note.savedText.length }],
+						location: note.location
+					});
+					note.persisted = true;
+					renderNotes();
+					showSaved();
+					fitEditor();
+				});
+			});
+
+			editor.addEventListener('input', () => {
+				const note = activeNote();
+				if (note) drafts.set(note.id, editor.value);
+				renderNotes();
+				fitEditor();
+			});
+
+			newNote.addEventListener('click', createNewNote);
+			cancelDelete.addEventListener('click', closeDeleteDialog);
+			confirmDelete.addEventListener('click', () => {
+				const noteId = pendingDeleteNoteId;
+				deleteDialog.close();
+				pendingDeleteNoteId = undefined;
+				deleteReturnFocus = undefined;
+				if (noteId) deleteNote(noteId);
+			});
+			deleteDialog.addEventListener('cancel', (event) => {
+				event.preventDefault();
+				closeDeleteDialog();
+			});
+			addRootFolder.addEventListener('click', () => {
+				creatingParentId = null;
+				renamingFolderId = undefined;
+				renderFolders();
+			});
+			sidebarToggle.addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
+			attachLocationBehavior(document.querySelector('[data-location="scratchpad"]'));
+			document.addEventListener('click', () => closeMoveMenus());
+			document.addEventListener('keydown', (event) => {
+				if (event.key === 'Escape') closeMoveMenus();
+			});
+			window.addEventListener('resize', fitEditor);
+			fitEditor();
+		</script>
+	</body>
+</html>
