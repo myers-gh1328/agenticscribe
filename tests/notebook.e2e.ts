@@ -16,6 +16,22 @@ test.beforeEach(async ({ page }) => {
 	await page.goto('/');
 });
 
+test('local agent setup is reachable from the notebook and returns without changing notes', async ({
+	page
+}) => {
+	await saveThought(page, 'Keep this note');
+	await openOrganizer(page);
+	await page.getByRole('button', { name: 'Agent setup' }).click();
+
+	await expect(page.getByRole('heading', { name: 'Connect your local agent' })).toBeVisible();
+	await expect(page.getByLabel('Base URL')).toHaveValue('http://192.168.4.43:8080/v1');
+	await expect(page.getByLabel('Model')).toHaveValue('mlx-community/gemma-4-e4b-it-8bit');
+	await expect(page.getByText('Not connected', { exact: true })).toBeVisible();
+
+	await page.getByRole('button', { name: 'Back to notes' }).click();
+	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toHaveValue('Keep this note\n');
+});
+
 test('Enter commits a note and reload restores only committed text', async ({ page }) => {
 	await saveThought(page, 'First saved thought');
 	await openOrganizer(page);

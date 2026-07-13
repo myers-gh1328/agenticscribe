@@ -92,6 +92,16 @@
 				margin-bottom: 21px;
 			}
 
+			.agent-setup-link {
+				margin-top: auto;
+				border-top: 1px solid rgba(255, 255, 255, 0.1);
+				padding-top: 14px;
+			}
+
+			.agent-setup-link .sidebar-item {
+				color: #d7d2c5;
+			}
+
 			.section-label {
 				margin: 0 10px 7px;
 				color: var(--sidebar-muted);
@@ -467,6 +477,201 @@
 				min-height: 100vh;
 			}
 
+			.workspace[hidden],
+			.setup-page[hidden] {
+				display: none;
+			}
+
+			.setup-page {
+				min-height: 100vh;
+				padding: clamp(38px, 7vw, 88px) clamp(22px, 7vw, 92px);
+				background:
+					radial-gradient(circle at 82% 8%, rgba(255, 255, 255, 0.5), transparent 25rem),
+					linear-gradient(135deg, #e1d9ca, var(--desk));
+			}
+
+			.setup-sheet {
+				width: min(100%, 720px);
+				margin: 0 auto;
+				border: 1px solid rgba(72, 62, 48, 0.12);
+				background: var(--paper);
+				padding: clamp(28px, 6vw, 64px);
+				box-shadow: 0 24px 70px rgba(54, 45, 34, 0.16);
+			}
+
+			.setup-back {
+				border: 0;
+				background: transparent;
+				padding: 0;
+				color: var(--muted);
+				font-size: 14px;
+				cursor: pointer;
+			}
+
+			.setup-back:hover,
+			.setup-back:focus-visible {
+				color: var(--ink);
+				outline: 0;
+				text-decoration: underline;
+				text-underline-offset: 4px;
+			}
+
+			.setup-eyebrow {
+				margin: 54px 0 12px;
+				color: #984839;
+				font: 10px/1.4 ui-monospace, 'Cascadia Mono', monospace;
+				letter-spacing: 0.14em;
+				text-transform: uppercase;
+			}
+
+			.setup-sheet h2 {
+				max-width: 520px;
+				margin: 0;
+				font-size: clamp(32px, 5vw, 48px);
+				font-weight: normal;
+				line-height: 1.05;
+				letter-spacing: -0.035em;
+			}
+
+			.setup-intro {
+				max-width: 570px;
+				margin: 18px 0 34px;
+				color: var(--muted);
+				font-size: 16px;
+				line-height: 1.55;
+			}
+
+			.connection-card {
+				border-top: 1px solid rgba(72, 62, 48, 0.14);
+				border-bottom: 1px solid rgba(72, 62, 48, 0.14);
+				padding: 25px 0 27px;
+			}
+
+			.connection-status {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 20px;
+				margin-bottom: 24px;
+			}
+
+			.connection-status strong {
+				font-size: 17px;
+				font-weight: normal;
+			}
+
+			.status-pill {
+				display: inline-flex;
+				align-items: center;
+				gap: 7px;
+				border: 1px solid rgba(72, 62, 48, 0.14);
+				border-radius: 999px;
+				padding: 6px 10px;
+				color: var(--muted);
+				font: 11px/1 ui-monospace, 'Cascadia Mono', monospace;
+			}
+
+			.status-pill::before {
+				width: 6px;
+				height: 6px;
+				border-radius: 50%;
+				background: #a75c4d;
+				content: '';
+			}
+
+			.setup-field {
+				display: block;
+				margin-top: 19px;
+			}
+
+			.setup-field span {
+				display: block;
+				margin-bottom: 7px;
+				color: var(--ink);
+				font: 11px/1.3 ui-monospace, 'Cascadia Mono', monospace;
+				letter-spacing: 0.07em;
+				text-transform: uppercase;
+			}
+
+			.setup-field input,
+			.setup-field select {
+				width: 100%;
+				border: 1px solid rgba(72, 62, 48, 0.22);
+				border-radius: 7px;
+				background: #fffdf7;
+				padding: 11px 12px;
+				color: var(--ink);
+				font: 14px/1.4 ui-monospace, 'Cascadia Mono', monospace;
+			}
+
+			.setup-field input:focus,
+			.setup-field select:focus {
+				border-color: #8f6a5b;
+				outline: 2px solid rgba(143, 106, 91, 0.16);
+				outline-offset: 1px;
+			}
+
+			.setup-option {
+				display: flex;
+				align-items: flex-start;
+				gap: 11px;
+				margin-top: 24px;
+				color: var(--ink);
+				font-size: 15px;
+				line-height: 1.4;
+			}
+
+			.setup-option input {
+				width: 17px;
+				height: 17px;
+				margin: 2px 0 0;
+				accent-color: #3c5b4a;
+			}
+
+			.setup-option small {
+				display: block;
+				margin-top: 3px;
+				color: var(--muted);
+				font-size: 13px;
+			}
+
+			.privacy-note {
+				margin: 24px 0 0;
+				color: var(--muted);
+				font-size: 13px;
+				line-height: 1.5;
+			}
+
+			.setup-actions {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 16px;
+				margin-top: 28px;
+			}
+
+			.setup-actions p {
+				margin: 0;
+				color: var(--muted);
+				font: 11px/1.4 ui-monospace, 'Cascadia Mono', monospace;
+			}
+
+			.connect-agent {
+				border: 1px solid #343c37;
+				border-radius: 7px;
+				background: #343c37;
+				padding: 10px 16px;
+				color: #fffaf2;
+				cursor: pointer;
+			}
+
+			.connect-agent:hover,
+			.connect-agent:focus-visible {
+				background: #252b28;
+				outline: 2px solid #c7b895;
+				outline-offset: 2px;
+			}
+
 			body {
 				background:
 					radial-gradient(circle at 18% 4%, rgba(255, 255, 255, 0.44), transparent 29rem),
@@ -629,6 +834,27 @@
 				.shortcut {
 					display: none;
 				}
+
+				.setup-page {
+					padding: 18px 12px;
+				}
+
+				.setup-sheet {
+					padding: 24px 22px 30px;
+				}
+
+				.setup-eyebrow {
+					margin-top: 40px;
+				}
+
+				.setup-actions {
+					align-items: stretch;
+					flex-direction: column;
+				}
+
+				.connect-agent {
+					width: 100%;
+				}
 			}
 		</style>
 	</head>
@@ -661,6 +887,13 @@
 						<p class="empty-location" id="empty-location" hidden>No notes here yet.</p>
 					</section>
 				</nav>
+
+				<div class="agent-setup-link">
+					<button class="sidebar-item" id="open-agent-setup" type="button">
+						<span aria-hidden="true">✦</span>
+						Agent setup
+					</button>
+				</div>
 			</aside>
 
 			<button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Open folders">
@@ -682,6 +915,55 @@
 					<span class="shortcut">Enter saves thought · Shift + Enter adds a line</span>
 				</div>
 			</div>
+
+			<main class="setup-page" id="setup-page" hidden>
+				<section class="setup-sheet" aria-labelledby="setup-title">
+					<button class="setup-back" id="close-agent-setup" type="button">← Back to notes</button>
+					<p class="setup-eyebrow">Local AI · this device only</p>
+					<h2 id="setup-title">Connect your local agent</h2>
+					<p class="setup-intro">
+						AgenticScribe will send only a newly saved thought to the agent for spelling and grammar cleanup.
+						Your original thought stays preserved.
+					</p>
+
+					<form id="agent-setup-form">
+						<div class="connection-card">
+							<div class="connection-status">
+								<strong>OpenAI-compatible agent</strong>
+								<span class="status-pill">Not connected</span>
+							</div>
+
+							<label class="setup-field">
+								<span>Base URL</span>
+								<input name="baseUrl" type="url" value="http://192.168.4.43:8080/v1" required />
+							</label>
+
+							<label class="setup-field">
+								<span>Model</span>
+								<select name="model">
+									<option value="mlx-community/gemma-4-e4b-it-8bit">mlx-community/gemma-4-e4b-it-8bit</option>
+								</select>
+							</label>
+
+							<label class="setup-option">
+								<input name="automaticCleanup" type="checkbox" checked />
+								<span>
+									Clean each thought after Enter
+									<small>Only spelling, grammar, capitalization, and punctuation.</small>
+								</span>
+							</label>
+						</div>
+
+						<p class="privacy-note">
+							Connection details stay in this browser. AgenticScribe continues to take notes when the agent is unavailable.
+						</p>
+						<div class="setup-actions">
+							<p>Nothing is sent until you connect.</p>
+							<button class="connect-agent" type="submit">Save &amp; connect</button>
+						</div>
+					</form>
+				</section>
+			</main>
 		</div>
 
 		<dialog class="confirm-dialog" id="delete-dialog" aria-labelledby="delete-dialog-title">
@@ -714,6 +996,11 @@
 			const deleteNoteName = document.querySelector('#delete-note-name');
 			const cancelDelete = document.querySelector('#cancel-delete');
 			const confirmDelete = document.querySelector('#confirm-delete');
+			const workspace = document.querySelector('.workspace');
+			const setupPage = document.querySelector('#setup-page');
+			const openAgentSetup = document.querySelector('#open-agent-setup');
+			const closeAgentSetup = document.querySelector('#close-agent-setup');
+			const agentSetupForm = document.querySelector('#agent-setup-form');
 			const store = new NotebookStore({ databaseName: 'agenticscribe' });
 			let folders = await store.listFolders();
 			let notes = (await store.listNotes()).map((note) => ({
@@ -1156,6 +1443,21 @@
 			});
 
 			newNote.addEventListener('click', createNewNote);
+			openAgentSetup.addEventListener('click', () => {
+				const note = activeNote();
+				if (note) drafts.set(note.id, editor.value);
+				workspace.hidden = true;
+				setupPage.hidden = false;
+				document.body.classList.remove('sidebar-open');
+				closeAgentSetup.focus();
+			});
+			closeAgentSetup.addEventListener('click', () => {
+				setupPage.hidden = true;
+				workspace.hidden = false;
+				fitEditor();
+				editor.focus();
+			});
+			agentSetupForm.addEventListener('submit', (event) => event.preventDefault());
 			cancelDelete.addEventListener('click', closeDeleteDialog);
 			confirmDelete.addEventListener('click', () => {
 				const noteId = pendingDeleteNoteId;
