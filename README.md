@@ -11,8 +11,11 @@ AgenticScribe is a focused, local-first note-taking web application. This initia
 - Notes begin in Scratchpad or in the folder selected before creation.
 - Folders can be created, nested, and renamed.
 - Desktop and mobile use the same note-taking workflow.
+- A local OpenAI-compatible agent can be configured from Agent setup.
+- When enabled, Enter saves the raw thought first and then sends only that thought for spelling and grammar cleanup.
+- Failed cleanup leaves the original thought unchanged and does not retry automatically.
 
-This milestone intentionally contains no authentication, synchronization, AI, voice, server-side note database, sharing, or old Scribestead UI.
+This milestone intentionally contains no authentication, synchronization, voice, summaries, finalization, server-side note database, sharing, or old Scribestead UI.
 
 ## Requirements
 
@@ -36,7 +39,7 @@ The verification path runs TypeScript checking, Vitest coverage, a production bu
 
 ## Data and privacy
 
-Notes and folders are stored in IndexedDB in the current browser profile. They are not synchronized or sent to a server. Clearing site data, deleting the browser profile, or browser storage eviction can remove them.
+Notes and folders are stored in IndexedDB in the current browser profile. Local-agent connection settings are stored in the same browser profile. Notes are not synchronized. When automatic cleanup is enabled, only the newly submitted thought is sent to the configured local endpoint; the original is retained with the note. Clearing site data, deleting the browser profile, or browser storage eviction can remove this data.
 
 Do not commit real notes, client information, browser databases, logs, screenshots containing private notes, or generated test artifacts. Tests use synthetic content only.
 

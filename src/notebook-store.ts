@@ -7,6 +7,7 @@ const ROOT = '\u0000root';
 export interface ThoughtBoundary {
 	id: string;
 	end: number;
+	originalText?: string;
 }
 
 export interface CommittedNote {

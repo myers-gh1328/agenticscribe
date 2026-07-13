@@ -32,6 +32,117 @@ test('local agent setup is reachable from the notebook and returns without chang
 	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toHaveValue('Keep this note\n');
 });
 
+test('connecting the local agent cleans only a thought after it is saved', async ({ page }) => {
+	let modelRequests = 0;
+	await page.route('**/v1/models', async (route) => {
+		modelRequests += 1;
+		if (route.request().method() === 'OPTIONS') {
+			await route.fulfill({
+				status: 204,
+				headers: {
+					'Access-Control-Allow-Origin': '*',
+					'Access-Control-Allow-Methods': 'GET, OPTIONS',
+					'Access-Control-Allow-Private-Network': 'true'
+				}
+			});
+			return;
+		}
+		await route.fulfill({
+			headers: {
+				'Access-Control-Allow-Origin': '*',
+				'Access-Control-Allow-Private-Network': 'true'
+			},
+			json: { data: [{ id: 'mlx-community/gemma-4-e4b-it-8bit' }] }
+		});
+	});
+	let releaseCleanup!: () => void;
+	const cleanupReleased = new Promise<void>((resolve) => {
+		releaseCleanup = resolve;
+	});
+	let cleanupRequested!: () => void;
+	const cleanupRequest = new Promise<void>((resolve) => {
+		cleanupRequested = resolve;
+	});
+	await page.route('**/v1/chat/completions', async (route) => {
+		if (route.request().method() === 'OPTIONS') {
+			await route.fulfill({
+				status: 204,
+				headers: {
+					'Access-Control-Allow-Origin': '*',
+					'Access-Control-Allow-Headers': 'Content-Type',
+					'Access-Control-Allow-Methods': 'POST, OPTIONS',
+					'Access-Control-Allow-Private-Network': 'true'
+				}
+			});
+			return;
+		}
+		const requestBody = route.request().postDataJSON();
+		expect(requestBody.messages.at(-1)).toEqual({
+			role: 'user',
+			content: 'this thought have bad grammer.'
+		});
+		cleanupRequested();
+		await cleanupReleased;
+		await route.fulfill({
+			headers: {
+				'Access-Control-Allow-Origin': '*',
+				'Access-Control-Allow-Private-Network': 'true'
+			},
+			json: { choices: [{ message: { content: 'This thought has bad grammar.' } }] }
+		});
+	});
+
+	await openOrganizer(page);
+	await page.getByRole('button', { name: 'Agent setup' }).click();
+	await page.getByRole('button', { name: 'Save & connect' }).click();
+	await expect.poll(() => modelRequests).toBeGreaterThan(0);
+	await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Back to notes' }).click();
+
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await editor.fill('this thought have bad grammer.');
+	await editor.press('Enter');
+	await cleanupRequest;
+	await expect(editor).toHaveValue('this thought have bad grammer.\n');
+	releaseCleanup();
+	await expect(editor).toHaveValue('This thought has bad grammar.\n');
+	await expect(page.getByRole('status')).toContainText('Thought cleaned and saved');
+
+	await page.reload();
+	await expect(editor).toHaveValue('This thought has bad grammar.\n');
+});
+
+test('a failed cleanup keeps the submitted thought unchanged', async ({ page }) => {
+	await page.route('**/v1/models', async (route) => {
+		await route.fulfill({
+			headers: { 'Access-Control-Allow-Origin': '*' },
+			json: { data: [{ id: 'mlx-community/gemma-4-e4b-it-8bit' }] }
+		});
+	});
+	await page.route('**/v1/chat/completions', async (route) => {
+		await route.fulfill({
+			status: 500,
+			headers: { 'Access-Control-Allow-Origin': '*' },
+			json: { error: 'synthetic failure' }
+		});
+	});
+
+	await openOrganizer(page);
+	await page.getByRole('button', { name: 'Agent setup' }).click();
+	await page.getByRole('button', { name: 'Save & connect' }).click();
+	await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Back to notes' }).click();
+
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await editor.fill('keep this raw thought');
+	await editor.press('Enter');
+	await expect(page.getByRole('status')).toContainText('Cleanup failed — original kept');
+	await expect(editor).toHaveValue('keep this raw thought\n');
+
+	await page.reload();
+	await expect(editor).toHaveValue('keep this raw thought\n');
+});
+
 test('Enter commits a note and reload restores only committed text', async ({ page }) => {
 	await saveThought(page, 'First saved thought');
 	await openOrganizer(page);
@@ -41,6 +152,15 @@ test('Enter commits a note and reload restores only committed text', async ({ pa
 	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toHaveValue(
 		'First saved thought\n'
 	);
+});
+
+test('the organizer stays pinned while a long note scrolls', async ({ page }) => {
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await editor.fill(Array.from({ length: 80 }, (_, index) => `Line ${index + 1}`).join('\n'));
+	await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+
+	const organizer = page.getByRole('complementary', { name: 'Notebook organization' });
+	await expect.poll(async () => (await organizer.boundingBox())?.y).toBe(0);
 });
 
 test('switching preserves an unfinished draft in memory but reload discards it', async ({ page }) => {

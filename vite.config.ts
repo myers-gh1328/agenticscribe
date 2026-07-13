@@ -8,7 +8,7 @@ export default defineConfig({
 		coverage: {
 			provider: 'v8',
 			reporter: ['text', 'lcov'],
-			include: ['src/notebook-store.ts'],
+			include: ['src/notebook-store.ts', 'src/local-agent.ts', 'src/thoughts.ts'],
 			exclude: ['src/**/*.spec.ts'],
 			thresholds: {
 				statements: 80,
