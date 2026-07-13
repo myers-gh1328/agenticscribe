@@ -12,6 +12,8 @@
 		"dev": "vite",
 		"build": "tsc --noEmit && vite build",
 		"preview": "vite preview",
+		"start": "node scripts/serve.mjs",
+		"deploy:local": "node scripts/deploy/local-release.mjs",
 		"check": "tsc --noEmit",
 		"test:unit": "vitest run",
 		"test:coverage": "vitest run --coverage",
