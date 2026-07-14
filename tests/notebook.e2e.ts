@@ -196,7 +196,7 @@ test('the organizer stays pinned while a long note scrolls', async ({ page }) =>
 	await expect.poll(async () => (await organizer.boundingBox())?.y).toBe(0);
 });
 
-test('switching preserves an unfinished draft in memory but reload discards it', async ({ page }) => {
+test('switching and reload preserve an unfinished draft locally', async ({ page }) => {
 	await saveThought(page, 'First note');
 	await openOrganizer(page);
 	await expect(page.getByRole('button', { name: 'First note', exact: true })).toBeVisible();
@@ -223,7 +223,9 @@ test('switching preserves an unfinished draft in memory but reload discards it',
 	await page.reload();
 	await openOrganizer(page);
 	await page.getByRole('button', { name: 'First note', exact: true }).click();
-	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toHaveValue('First note\n');
+	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toHaveValue(
+		'First note\n unsaved tail'
+	);
 });
 
 test('a new note is created directly inside the selected folder', async ({ page }) => {

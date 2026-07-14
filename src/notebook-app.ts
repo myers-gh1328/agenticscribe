@@ -40,14 +40,27 @@ let syncQueue = Promise.resolve(false);
 let syncConflict = false;
 let serverDurable = await synchronizeNotebook();
 let folders: StoredFolder[] = await store.listFolders();
-let notes: NotebookNote[] = (await store.listNotes()).map((note) => ({
+const storedNotes = await store.listNotes();
+const storedDrafts = await store.listDrafts();
+let notes: NotebookNote[] = storedNotes.map((note) => ({
 	id: note.id,
 	savedText: note.text,
 	thoughts: note.thoughts,
 	location: note.location,
 	persisted: true
 }));
+for (const draft of storedDrafts) {
+	if (notes.some((note) => note.id === draft.noteId)) continue;
+	notes.push({
+		id: draft.noteId,
+		savedText: '',
+		thoughts: [],
+		location: draft.location,
+		persisted: false
+	});
+}
 const drafts = new Map(notes.map((note) => [note.id, note.savedText]));
+for (const draft of storedDrafts) drafts.set(draft.noteId, draft.text);
 let activeNoteId = notes[0]?.id;
 let selectedLocation = notes[0]?.location ?? 'scratchpad';
 let creatingParentId: string | null | undefined;
@@ -499,6 +512,8 @@ async function cleanSubmittedThought(noteId: string, thoughtId: string, rawThoug
 		if (currentDraft.slice(update.start, update.end) === savedSegment) {
 			const updatedDraft = `${currentDraft.slice(0, update.start)}${update.replacement}${currentDraft.slice(update.end)}`;
 			drafts.set(note.id, updatedDraft);
+			if (updatedDraft === update.text) await store.clearDraft(note.id);
+			else await store.saveDraft(note.id, updatedDraft, note.location);
 			if (activeNoteId === note.id) editor.value = updatedDraft;
 		}
 		await store.commitNote({
@@ -553,28 +568,33 @@ editor.addEventListener('keydown', (event) => {
 	drafts.set(note.id, submittedText);
 	fitEditor();
 	void (async () => {
-			const thoughtId = `thought-${crypto.randomUUID()}`;
-			const submitted = appendThought(note.savedText, note.thoughts, submittedText, thoughtId);
-			note.savedText = submittedText;
-			note.thoughts = submitted.thoughts;
+		await store.saveDraft(note.id, submittedText, note.location);
+		const thoughtId = `thought-${crypto.randomUUID()}`;
+		const submitted = appendThought(note.savedText, note.thoughts, submittedText, thoughtId);
+		note.savedText = submittedText;
+		note.thoughts = submitted.thoughts;
 		await store.commitNote({
 			id: note.id,
 			text: note.savedText,
 			thoughts: note.thoughts,
 			location: note.location
 		});
+		await store.clearDraft(note.id, submittedText);
 		note.persisted = true;
 		renderNotes();
 		serverDurable = await synchronizeNotebook();
 		showSaved(serverDurable);
-			fitEditor();
-			if (submitted.appended) void cleanSubmittedThought(note.id, thoughtId, submitted.rawThought);
-		})();
+		fitEditor();
+		if (submitted.appended) void cleanSubmittedThought(note.id, thoughtId, submitted.rawThought);
+	})();
 });
 
 editor.addEventListener('input', () => {
 	const note = activeNote();
-	if (note) drafts.set(note.id, editor.value);
+	if (note) {
+		drafts.set(note.id, editor.value);
+		void store.saveDraft(note.id, editor.value, note.location);
+	}
 	renderNotes();
 	fitEditor();
 });
