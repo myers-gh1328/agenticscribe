@@ -4,6 +4,11 @@ AgenticScribe is a focused, offline-capable note-taking web application. The
 server SQLite database is authoritative; IndexedDB is a transactional offline
 cache and mutation outbox.
 
+The browser application uses SvelteKit with a static `dist/` build. The custom
+Node server continues to own authentication, private APIs, SQLite, health
+checks, and static delivery. See
+[`docs/architecture/frontend.md`](docs/architecture/frontend.md).
+
 ## Current functionality
 
 - Enter commits immediately to IndexedDB and synchronizes to the private server.

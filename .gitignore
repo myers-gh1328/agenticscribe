@@ -4,6 +4,7 @@ coverage/
 playwright-report/
 test-results/
 .vite/
+.svelte-kit/
 *.log
 .DS_Store
 releases/

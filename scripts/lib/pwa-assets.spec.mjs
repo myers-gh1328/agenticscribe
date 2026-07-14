@@ -16,7 +16,7 @@ describe('PWA assets', () => {
 	});
 
 	it('links the manifest and keeps authentication and APIs network-only', async () => {
-		const html = await readFile(resolve('index.html'), 'utf8');
+		const html = await readFile(resolve('src/app.html'), 'utf8');
 		const worker = await readFile(resolve('public/sw.js'), 'utf8');
 		expect(html).toContain('rel="manifest" href="/manifest.webmanifest"');
 		expect(worker).toContain("pathname.startsWith('/api/')");

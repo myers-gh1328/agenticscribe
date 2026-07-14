@@ -1,15 +1,8 @@
 import { defineConfig } from 'vitest/config';
-// @ts-expect-error Native Node build helper intentionally remains JavaScript.
-import { stampServiceWorker } from './scripts/lib/pwa-build.mjs';
+import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
-	plugins: [{
-		name: 'stamp-pwa-service-worker',
-		apply: 'build',
-		async closeBundle() {
-			await stampServiceWorker(new URL('./dist', import.meta.url).pathname);
-		}
-	}],
+	plugins: [sveltekit()],
 	test: {
 		environment: 'node',
 		include: ['src/**/*.spec.ts', 'scripts/**/*.spec.mjs'],

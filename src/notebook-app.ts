@@ -26,6 +26,12 @@ interface NotebookNote {
 	persisted: boolean;
 }
 
+let initialized = false;
+
+export async function initializeNotebookApp() {
+	if (initialized) return;
+	initialized = true;
+
 const editor = requireElement<HTMLTextAreaElement>('#editor');
 const state = requireElement<HTMLElement>('#capture-state');
 const stateText = requireElement<HTMLElement>('#state-text');
@@ -793,3 +799,4 @@ window.addEventListener('online', () => {
 editor.disabled = false;
 document.documentElement.dataset.notebookReady = 'true';
 fitEditor();
+}
