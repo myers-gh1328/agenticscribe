@@ -75,6 +75,50 @@ describe('static server', () => {
 		expect(JSON.stringify(upstreamRequests)).not.toContain('owner@example.test');
 	});
 
+	it('allows same-origin deployment agent access when capability enforcement is disabled', async () => {
+		const upstream = createServer((request, response) => {
+			response.setHeader('Content-Type', 'application/json');
+			if (request.url === '/v1/models') {
+				response.end(JSON.stringify({ data: [{ id: 'deployment-model' }] }));
+			} else {
+				response.end(JSON.stringify({ choices: [{ message: { content: 'A cleaned thought.' } }] }));
+			}
+		});
+		await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+		const upstreamAddress = upstream.address();
+		const root = await mkdtemp(join(tmpdir(), 'agenticscribe-server-'));
+		await writeFile(join(root, 'index.html'), '<h1>AgenticScribe</h1>');
+		const server = await startStaticServer({
+			host: '127.0.0.1',
+			port: 0,
+			staticRoot: root,
+			canonicalOrigin: 'http://192.168.4.222:3014',
+			agentBaseUrl: `http://127.0.0.1:${upstreamAddress.port}/v1`,
+			agentModel: 'deployment-model'
+		});
+		cleanup.push(async () => {
+			await server.close();
+			await new Promise((resolve, reject) => upstream.close((error) => error ? reject(error) : resolve()));
+			await rm(root, { recursive: true, force: true });
+		});
+
+		const status = await fetch(`${server.url}/api/agent/status`);
+		expect(status.status).toBe(200);
+		expect(await status.json()).toEqual({ configured: true, available: true, model: 'deployment-model' });
+
+		const cleaned = await fetch(`${server.url}/api/agent/cleanup`, {
+			method: 'POST',
+			headers: {
+				Origin: 'http://192.168.4.222:3014',
+				'Content-Type': 'application/json',
+				'Sec-Fetch-Site': 'same-origin'
+			},
+			body: JSON.stringify({ thought: 'a raw thought' })
+		});
+		expect(cleaned.status).toBe(200);
+		expect(await cleaned.json()).toEqual({ cleanedThought: 'A cleaned thought.' });
+	});
+
 	it('fails agent cleanup closed before contacting upstream when browser request gates fail', async () => {
 		const request = vi.fn();
 		const root = await mkdtemp(join(tmpdir(), 'agenticscribe-server-'));
@@ -230,6 +274,50 @@ describe('static server', () => {
 			}
 		});
 		expect(await otherOwner.json()).toMatchObject({ notes: [], folders: [] });
+	});
+
+	it('persists durable notebook state for a same-origin LAN deployment', async () => {
+		const root = await mkdtemp(join(tmpdir(), 'agenticscribe-server-'));
+		await writeFile(join(root, 'index.html'), '<h1>AgenticScribe</h1>');
+		const server = await startStaticServer({
+			host: '127.0.0.1',
+			port: 0,
+			staticRoot: root,
+			databasePath: join(root, 'notes.sqlite'),
+			syncEnabled: true,
+			canonicalOrigin: 'http://192.168.4.222:3014'
+		});
+		cleanup.push(async () => {
+			await server.close();
+			await rm(root, { recursive: true, force: true });
+		});
+
+		const snapshot = await fetch(`${server.url}/api/notebook/snapshot`);
+		expect(snapshot.status).toBe(200);
+		expect(await snapshot.json()).toMatchObject({ schemaVersion: 1, notes: [], folders: [] });
+
+		const wrongOrigin = await fetch(`${server.url}/api/notebook/mutations`, {
+			method: 'POST',
+			headers: {
+				Origin: 'http://wrong.example.test',
+				'Content-Type': 'application/json',
+				'Sec-Fetch-Site': 'same-origin'
+			},
+			body: JSON.stringify(folderMutation())
+		});
+		expect(wrongOrigin.status).toBe(403);
+
+		const created = await fetch(`${server.url}/api/notebook/mutations`, {
+			method: 'POST',
+			headers: {
+				Origin: 'http://192.168.4.222:3014',
+				'Content-Type': 'application/json',
+				'Sec-Fetch-Site': 'same-origin'
+			},
+			body: JSON.stringify(folderMutation())
+		});
+		expect(created.status).toBe(200);
+		expect(await created.json()).toMatchObject({ status: 'applied', entityVersion: 1 });
 	});
 
 	it('fails closed when sync is disabled and rejects oversized JSON before mutation', async () => {

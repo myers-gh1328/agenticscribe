@@ -17,9 +17,10 @@ cache and mutation outbox.
 - When enabled, Enter saves the raw thought first and then sends only that thought for spelling and grammar cleanup.
 - Failed cleanup leaves the original thought unchanged and does not retry automatically.
 
-The private deployment authenticates requests with identity and application
-capability headers supplied by Tailscale Serve. The app does not implement
-public access, collaboration, voice, summaries, finalization, or sharing.
+Deployments may enforce identity and application capability headers or run on
+a trusted private LAN with capability enforcement disabled. The app does not
+implement public access, collaboration, voice, summaries, finalization, or
+sharing.
 
 ## Requirements
 
@@ -69,10 +70,11 @@ configuration, and the browser uses the same-origin AgenticScribe API. When
 automatic cleanup is enabled, only the newly submitted thought is sent to the
 deployment-managed endpoint; the original is retained with the note.
 
-Production configuration requires a loopback listener behind Tailscale Serve,
-an exact canonical HTTPS origin, an application capability, a protected data
-directory, deployment-owned `AGENTIC_SCRIBE_AGENT_BASE_URL` and
-`AGENTIC_SCRIBE_AGENT_MODEL` values, and a separately managed encrypted backup. See
+Production configuration requires a private listener, an exact canonical
+origin, a protected data directory, deployment-owned
+`AGENTIC_SCRIBE_AGENT_BASE_URL` and `AGENTIC_SCRIBE_AGENT_MODEL` values, and a
+separately managed encrypted backup. Tailscale deployments additionally set an
+application capability; trusted LAN deployments leave it unset. See
 [`docs/architecture/durable-notes.md`](docs/architecture/durable-notes.md).
 
 Create an integrity-checked SQLite snapshot while the service is running:
