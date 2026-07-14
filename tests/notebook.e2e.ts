@@ -1,19 +1,88 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type TestInfo } from '@playwright/test';
+
+const capability = 'aegirtech.dev/cap/agenticscribe';
+
+function testOwner(testInfo: TestInfo) {
+	const identity = `${testInfo.project.name}-${testInfo.title}`
+		.toLowerCase()
+		.replaceAll(/[^a-z0-9]+/g, '-')
+		.replaceAll(/^-|-$/g, '')
+		.slice(0, 180);
+	return `playwright-${identity}@example.test`;
+}
+
+function tailscaleHeaders(owner: string) {
+	return {
+		'Tailscale-User-Login': owner,
+		'Tailscale-App-Capabilities': JSON.stringify({
+			[capability]: [{ role: 'owner' }]
+		})
+	};
+}
 
 async function openOrganizer(page: Page) {
 	const toggle = page.getByRole('button', { name: 'Open folders' });
-	if (await toggle.isVisible()) await toggle.click();
+	const alreadyOpen = await page.locator('body').evaluate((body) => body.classList.contains('sidebar-open'));
+	if (!alreadyOpen && await toggle.isVisible()) await toggle.click();
 }
 
 async function saveThought(page: Page, text: string) {
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
 	await editor.fill(text);
 	await editor.press('Enter');
-	await expect(page.getByRole('status')).toContainText('Thought saved on this device');
+	await expect(page.getByRole('status')).toContainText('Thought saved to server');
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page }, testInfo) => {
+	await page.setExtraHTTPHeaders(tailscaleHeaders(testOwner(testInfo)));
 	await page.goto('/');
+});
+
+test('a committed note survives loss of the original browser profile', async ({ browser, page }, testInfo) => {
+	await saveThought(page, 'Stored on nanobot');
+	await expect(page.getByRole('status')).toContainText('Saved to server');
+
+	const replacementProfile = await browser.newContext({
+		extraHTTPHeaders: tailscaleHeaders(testOwner(testInfo))
+	});
+	try {
+		const replacementPage = await replacementProfile.newPage();
+		await replacementPage.goto('http://127.0.0.1:4173/');
+		await expect(replacementPage.getByRole('textbox', { name: 'Continuous note' })).toHaveValue(
+			'Stored on nanobot\n'
+		);
+	} finally {
+		await replacementProfile.close();
+	}
+});
+
+test('an offline commit syncs after reconnect and survives a new browser profile', async ({
+	browser,
+	context,
+	page
+}, testInfo) => {
+	await context.setOffline(true);
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await editor.fill('Written without a connection');
+	await editor.press('Enter');
+	await expect(page.getByRole('status')).toContainText('Thought saved offline — pending sync');
+
+	await context.setOffline(false);
+	await page.evaluate(() => window.dispatchEvent(new Event('online')));
+	await expect(page.getByRole('status')).toContainText('Saved to server');
+
+	const replacementProfile = await browser.newContext({
+		extraHTTPHeaders: tailscaleHeaders(testOwner(testInfo))
+	});
+	try {
+		const replacementPage = await replacementProfile.newPage();
+		await replacementPage.goto('http://127.0.0.1:4173/');
+		await expect(replacementPage.getByRole('textbox', { name: 'Continuous note' })).toHaveValue(
+			'Written without a connection\n'
+		);
+	} finally {
+		await replacementProfile.close();
+	}
 });
 
 test('local agent setup is reachable from the notebook and returns without changing notes', async ({
@@ -166,10 +235,16 @@ test('the organizer stays pinned while a long note scrolls', async ({ page }) =>
 test('switching preserves an unfinished draft in memory but reload discards it', async ({ page }) => {
 	await saveThought(page, 'First note');
 	await openOrganizer(page);
+	await expect(page.getByRole('button', { name: 'First note', exact: true })).toBeVisible();
 	await page.getByRole('button', { name: '＋ New note' }).click();
+	await openOrganizer(page);
+	await expect(page.getByRole('button', { name: 'First note', exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Untitled note unsaved', exact: true })).toBeVisible();
+	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toHaveValue('');
 	await saveThought(page, 'Second note');
 
 	await openOrganizer(page);
+	await expect(page.getByRole('button', { name: 'Second note', exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'First note', exact: true }).click();
 	await page.getByRole('textbox', { name: 'Continuous note' }).press('End');
 	await page.getByRole('textbox', { name: 'Continuous note' }).type(' unsaved tail');

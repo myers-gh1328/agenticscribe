@@ -9,7 +9,12 @@ const healthUrl = process.env.AGENTIC_SCRIBE_HEALTH_URL ?? `http://127.0.0.1:${p
 const previousRelease = await currentRelease(releaseRoot);
 
 run(process.env.npm_execpath ? process.execPath : 'npm', process.env.npm_execpath ? [process.env.npm_execpath, 'run', 'build'] : ['run', 'build']);
-const release = await publishRelease({ distRoot: join(repoRoot, 'dist'), releaseRoot, releaseId: timestamp() });
+const release = await publishRelease({
+	projectRoot: repoRoot,
+	distRoot: join(repoRoot, 'dist'),
+	releaseRoot,
+	releaseId: timestamp()
+});
 
 if (process.env.AGENTIC_SCRIBE_RESTART_COMMAND) runShell(process.env.AGENTIC_SCRIBE_RESTART_COMMAND);
 if (process.env.AGENTIC_SCRIBE_SKIP_HEALTH_CHECK === 'true' || await waitForHealth(healthUrl)) {
