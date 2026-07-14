@@ -36,6 +36,12 @@ describe('Entra package integration', () => {
 		expect(await api.json()).toEqual({ error: 'authentication_required' });
 	});
 
+	it('prevents browser caching of authenticated session metadata', async () => {
+		const { server } = await startAuthenticatedServer();
+		const response = await fetch(`${server.url}/api/auth/session`);
+		expect(response.headers.get('cache-control')).toBe('no-store');
+	});
+
 	it('fails closed when an authentication adapter omits the verified object ID', async () => {
 		const root = await mkdtemp(join(tmpdir(), 'agenticscribe-invalid-auth-'));
 		await writeFile(join(root, 'index.html'), '<h1>AgenticScribe</h1>');

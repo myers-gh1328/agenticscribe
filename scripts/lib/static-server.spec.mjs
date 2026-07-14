@@ -198,6 +198,8 @@ describe('static server', () => {
 	it('serves health metadata and the single-page app', async () => {
 		const root = await mkdtemp(join(tmpdir(), 'agenticscribe-server-'));
 		await writeFile(join(root, 'index.html'), '<h1>AgenticScribe</h1>');
+		await writeFile(join(root, 'manifest.webmanifest'), '{}');
+		await writeFile(join(root, 'sw.js'), 'self.addEventListener("fetch", () => {});');
 		const server = await startStaticServer({ host: '127.0.0.1', port: 0, staticRoot: root });
 		cleanup.push(async () => {
 			await server.close();
@@ -209,6 +211,12 @@ describe('static server', () => {
 
 		const page = await fetch(`${server.url}/notes/example`);
 		expect(await page.text()).toContain('AgenticScribe');
+
+		const manifest = await fetch(`${server.url}/manifest.webmanifest`);
+		expect(manifest.headers.get('content-type')).toBe('application/manifest+json; charset=utf-8');
+		expect(manifest.headers.get('cache-control')).toBe('no-cache');
+		const worker = await fetch(`${server.url}/sw.js`);
+		expect(worker.headers.get('cache-control')).toBe('no-cache');
 	});
 
 	it('protects durable notebook state behind Tailscale identity and exact-origin checks', async () => {

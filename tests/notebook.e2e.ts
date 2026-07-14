@@ -38,6 +38,37 @@ test.beforeEach(async ({ page }, testInfo) => {
 	await page.goto('/');
 });
 
+test('the installed application shell reloads while offline', async ({ browser }, testInfo) => {
+	const context = await browser.newContext({
+		serviceWorkers: 'allow',
+		extraHTTPHeaders: tailscaleHeaders(testOwner(testInfo))
+	});
+	try {
+		const page = await context.newPage();
+		await page.goto('http://127.0.0.1:4173/');
+		await page.evaluate(async () => {
+			await navigator.serviceWorker.ready;
+		});
+		await page.reload();
+		await context.setOffline(true);
+		await page.reload();
+		await expect(page.getByRole('textbox', { name: 'Continuous note' })).toBeEnabled();
+		const protectedResults = await page.evaluate(async () => {
+			return Promise.all(['/api/notebook/snapshot', '/auth/login'].map(async (path) => {
+				try {
+					await fetch(path);
+					return 'unexpected-response';
+				} catch {
+					return 'network-only';
+				}
+			}));
+		});
+		expect(protectedResults).toEqual(['network-only', 'network-only']);
+	} finally {
+		await context.close();
+	}
+});
+
 test('a committed note survives loss of the original browser profile', async ({ browser, page }, testInfo) => {
 	await saveThought(page, 'Stored on nanobot');
 	await expect(page.getByRole('status')).toContainText('Saved to server');

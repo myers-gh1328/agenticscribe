@@ -13,7 +13,9 @@ const contentTypes = new Map([
 	['.html', 'text/html; charset=utf-8'],
 	['.js', 'text/javascript; charset=utf-8'],
 	['.json', 'application/json; charset=utf-8'],
+	['.png', 'image/png'],
 	['.svg', 'image/svg+xml'],
+	['.webmanifest', 'application/manifest+json; charset=utf-8'],
 	['.woff2', 'font/woff2'],
 ]);
 
@@ -47,6 +49,7 @@ export async function startStaticServer({
 			if (authentication) {
 				const authResponse = await authentication.handle(authRequest);
 				if (authResponse) {
+					if (request.url?.startsWith('/api/auth/session')) authResponse.headers.set('Cache-Control', 'no-store');
 					await writeAuthResponse(authResponse, response);
 					return;
 				}
@@ -124,7 +127,8 @@ export async function startStaticServer({
 
 			const filePath = await existingFile(requested) ?? resolve(root, 'index.html');
 			const body = await readFile(filePath);
-			response.setHeader('Cache-Control', extname(filePath) === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable');
+			const cacheMustRevalidate = extname(filePath) === '.html' || pathname === '/sw.js' || pathname === '/manifest.webmanifest';
+			response.setHeader('Cache-Control', cacheMustRevalidate ? 'no-cache' : 'public, max-age=31536000, immutable');
 			respond(response, 200, contentTypes.get(extname(filePath)) ?? 'application/octet-stream', body, request.method);
 		} catch {
 			respond(response, 404, 'text/plain; charset=utf-8', 'Not found', request.method);

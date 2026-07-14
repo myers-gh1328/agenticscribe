@@ -22,6 +22,7 @@ export function notebookDatabaseName(): string {
 export async function resolveNotebookDatabaseName(fetcher: typeof fetch = fetch): Promise<string> {
 	const response = await fetcher('/api/auth/session', {
 		headers: { Accept: 'application/json' },
+		cache: 'no-store',
 		signal: AbortSignal.timeout(1_000)
 	});
 	if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) {
