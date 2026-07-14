@@ -111,6 +111,43 @@ describe('static server', () => {
 		expect(await response.json()).toEqual({ error: 'request_origin_rejected' });
 		expect(request).not.toHaveBeenCalled();
 	});
+
+	it('records a content-free outcome when an agent status probe fails', async () => {
+		const agentEvent = vi.fn();
+		const root = await mkdtemp(join(tmpdir(), 'agenticscribe-server-'));
+		await writeFile(join(root, 'index.html'), '<h1>AgenticScribe</h1>');
+		const server = await startStaticServer({
+			host: '127.0.0.1',
+			port: 0,
+			staticRoot: root,
+			canonicalOrigin: 'https://scribe.example.ts.net',
+			requiredCapability: 'aegirtech.dev/cap/agenticscribe',
+			agentBaseUrl: 'http://127.0.0.1:1/v1',
+			agentModel: 'deployment-model',
+			agentFetch: vi.fn().mockRejectedValue(new TypeError('synthetic network failure')),
+			agentEvent
+		});
+		cleanup.push(async () => {
+			await server.close();
+			await rm(root, { recursive: true, force: true });
+		});
+		const response = await fetch(`${server.url}/api/agent/status`, {
+			headers: {
+				'Tailscale-User-Login': 'owner@example.test',
+				'Tailscale-App-Capabilities': JSON.stringify({
+					'aegirtech.dev/cap/agenticscribe': [{ role: 'owner' }]
+				})
+			}
+		});
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({ configured: true, available: false });
+		expect(agentEvent).toHaveBeenCalledWith({
+			event: 'agent_status_probe_failed',
+			outcome: 'network_error'
+		});
+		expect(JSON.stringify(agentEvent.mock.calls)).not.toContain('owner@example.test');
+	});
 	it('serves health metadata and the single-page app', async () => {
 		const root = await mkdtemp(join(tmpdir(), 'agenticscribe-server-'));
 		await writeFile(join(root, 'index.html'), '<h1>AgenticScribe</h1>');
