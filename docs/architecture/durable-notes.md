@@ -45,6 +45,10 @@ or deletion intent, and remote value/tombstone. Snapshot refresh never replaces
 dirty or conflicted entities. Same-browser stale revisions are rejected and a
 `BroadcastChannel` prompts other tabs to refresh.
 
+Unfinished editor text is stored in a separate browser-local draft table. It
+survives navigation and refresh without entering the mutation outbox or becoming
+server-authoritative until the user commits the thought with Enter.
+
 Deleted entities remain as content-free client and server tombstones so an
 offline browser cannot resurrect them during synchronization. Tombstone and
 mutation-receipt pruning is out of scope until clients have expiring durable
@@ -81,6 +85,7 @@ the server version to the cached entity.
 - Database writes, mutation receipt, and entity version changes share one
   SQLite transaction.
 - Server errors and offline state never delete the IndexedDB cache or outbox.
+- Refresh never discards an unfinished browser-local draft.
 - The server accepts notebook API calls only through its configured private
   origin; no public route is added.
 - State-changing requests require exact Origin, JSON content type, and Fetch

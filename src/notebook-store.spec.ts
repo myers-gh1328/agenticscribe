@@ -6,6 +6,7 @@ import {
 	FolderNameError,
 	NotebookConflictError,
 	NotebookStore,
+	SCRATCHPAD,
 	noteLabel,
 	type CommittedNote,
 	type NotebookMutation
@@ -27,6 +28,35 @@ afterEach(async () => {
 });
 
 describe('NotebookStore', () => {
+	it('persists unfinished drafts without clearing newer text', async () => {
+		const store = createStore();
+		await store.saveDraft('note-draft', 'unfinished', SCRATCHPAD);
+
+		expect(await store.listDrafts()).toEqual([
+		{
+			noteId: 'note-draft',
+			text: 'unfinished',
+			location: SCRATCHPAD,
+			updatedAt: '2026-07-13T12:00:00.000Z'
+		}
+	]);
+
+		await store.clearDraft('note-draft', 'older text');
+		expect(await store.listDrafts()).toHaveLength(1);
+
+		await store.clearDraft('note-draft', 'unfinished');
+		expect(await store.listDrafts()).toEqual([]);
+	});
+
+	it('deleting an uncommitted note also deletes its local draft', async () => {
+		const store = createStore();
+		await store.saveDraft('note-draft', 'unfinished', SCRATCHPAD);
+
+		await store.deleteNote('note-draft');
+
+		expect(await store.listDrafts()).toEqual([]);
+	});
+
 	it('hydrates clean folders and notes from the authoritative snapshot', async () => {
 		const store = createStore();
 		await store.synchronize({

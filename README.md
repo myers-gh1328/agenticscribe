@@ -8,7 +8,7 @@ cache and mutation outbox.
 
 - Enter commits immediately to IndexedDB and synchronizes to the private server.
 - Shift+Enter adds a line without committing.
-- Uncommitted text survives note switching in the current session but is intentionally lost on reload.
+- Uncommitted text is kept as a browser-local draft so it survives switching and reload.
 - Notes can be created, switched, moved, and permanently deleted with confirmation.
 - Notes begin in Scratchpad or in the folder selected before creation.
 - Folders can be created, nested, and renamed.
@@ -65,8 +65,9 @@ Notes and folders are stored authoritatively in SQLite and cached in IndexedDB
 for offline use. A committed offline mutation remains queued until the server
 acknowledges it. Concurrent server changes create an explicit local conflict;
 they do not silently overwrite the local copy. Only the automatic-cleanup
-preference remains browser-local. The server owns the agent endpoint and model
-configuration, and the browser uses the same-origin AgenticScribe API. When
+preference and unfinished drafts remain browser-local. The server owns the
+agent endpoint and model configuration, and the browser uses the same-origin
+AgenticScribe API. When
 automatic cleanup is enabled, only the newly submitted thought is sent to the
 deployment-managed endpoint; the original is retained with the note.
 

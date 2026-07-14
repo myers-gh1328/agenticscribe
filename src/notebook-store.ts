@@ -94,6 +94,13 @@ interface ConflictRecord {
 	createdAt: string;
 }
 
+export interface StoredDraft {
+	noteId: string;
+	text: string;
+	location: string;
+	updatedAt: string;
+}
+
 export interface NotebookSnapshot {
 	schemaVersion: number;
 	notes: Array<CommittedNote & { serverVersion: number; createdAt: string; updatedAt: string }>;
@@ -143,6 +150,7 @@ class NotebookDatabase extends Dexie {
 	outbox!: EntityTable<OutboxRecord, 'key'>;
 	tombstones!: EntityTable<TombstoneRecord, 'key'>;
 	conflicts!: EntityTable<ConflictRecord, 'key'>;
+	drafts!: EntityTable<StoredDraft, 'noteId'>;
 
 	constructor(name: string) {
 		super(name);
@@ -157,6 +165,15 @@ class NotebookDatabase extends Dexie {
 			outbox: '&key, createdAt',
 			tombstones: '&key, [entityType+entityId]',
 			conflicts: '&key, [entityType+entityId]'
+		});
+		this.version(3).stores({
+			notes: '&id, location, updatedAt',
+			folders: '&id, parentId, &[parentKey+normalizedName]',
+			sync: '&key, [entityType+entityId], status',
+			outbox: '&key, createdAt',
+			tombstones: '&key, [entityType+entityId]',
+			conflicts: '&key, [entityType+entityId]',
+			drafts: '&noteId, updatedAt'
 		});
 	}
 }
@@ -232,6 +249,23 @@ export class NotebookStore {
 		return folders
 			.map(({ parentKey: _parentKey, normalizedName: _normalizedName, ...folder }) => folder)
 			.sort((left, right) => left.name.localeCompare(right.name));
+	}
+
+	async listDrafts() {
+		return structuredClone(await this.#database.drafts.toArray());
+	}
+
+	async saveDraft(noteId: string, text: string, location: string) {
+		if (!noteId) throw new Error('A draft needs a note ID.');
+		await this.#database.drafts.put({ noteId, text, location, updatedAt: this.#now() });
+	}
+
+	async clearDraft(noteId: string, expectedText?: string) {
+		await this.#database.transaction('rw', this.#database.drafts, async () => {
+			const draft = await this.#database.drafts.get(noteId);
+			if (!draft || (expectedText !== undefined && draft.text !== expectedText)) return;
+			await this.#database.drafts.delete(noteId);
+		});
 	}
 
 	async commitNote(note: CommittedNote) {
@@ -341,8 +375,9 @@ export class NotebookStore {
 	async deleteNote(id: string) {
 		await this.#database.transaction(
 			'rw',
-			[this.#database.notes, this.#database.sync, this.#database.outbox, this.#database.tombstones],
+			[this.#database.notes, this.#database.sync, this.#database.outbox, this.#database.tombstones, this.#database.drafts],
 			async () => {
+				await this.#database.drafts.delete(id);
 				const previous = await this.#database.notes.get(id);
 				if (!previous) return;
 				const sync = await this.#database.sync.get(entityKey('note', id));
