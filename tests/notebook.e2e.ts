@@ -38,6 +38,27 @@ test.beforeEach(async ({ page }, testInfo) => {
 	await page.goto('/');
 });
 
+test('offers the browser install prompt without making the user hunt for it', async ({ page }) => {
+	await page.evaluate(() => {
+		const installEvent = new Event('beforeinstallprompt', { cancelable: true });
+		Object.defineProperty(installEvent, 'prompt', {
+			value: () => {
+				(window as Window & { installPromptCalled?: boolean }).installPromptCalled = true;
+				return Promise.resolve({ outcome: 'accepted' });
+			}
+		});
+		window.dispatchEvent(installEvent);
+	});
+
+	await openOrganizer(page);
+	await expect(page.getByRole('heading', { name: 'Install AgenticScribe' })).toBeVisible();
+	await page.getByRole('button', { name: 'Install app' }).click();
+	await expect.poll(() => page.evaluate(() =>
+		Boolean((window as Window & { installPromptCalled?: boolean }).installPromptCalled)
+	)).toBe(true);
+	await expect(page.getByRole('heading', { name: 'Install AgenticScribe' })).toHaveCount(0);
+});
+
 test('the installed application shell reloads while offline', async ({ browser }, testInfo) => {
 	const context = await browser.newContext({
 		serviceWorkers: 'allow',

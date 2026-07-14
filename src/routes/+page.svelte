@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { initializeNotebookApp } from '../notebook-app';
+	import InstallPrompt from '../lib/InstallPrompt.svelte';
 	import '../agent-setup.css';
 	import '../styles.css';
 
@@ -50,6 +51,7 @@
 		</nav>
 
 		<div class="agent-setup-link">
+			<InstallPrompt />
 			<button class="sidebar-item" id="open-agent-setup" type="button">
 				<span aria-hidden="true">✦</span>
 				Agent setup
