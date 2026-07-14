@@ -10,6 +10,8 @@ cache and mutation outbox.
 - Shift+Enter adds a line without committing.
 - Uncommitted text is kept as a browser-local draft so it survives switching and reload.
 - Notes can be created, switched, moved, and permanently deleted with confirmation.
+- Markdown source is preserved through local storage and server synchronization.
+- In supported secure-context browsers, an explicitly selected `.md` file can be edited as a local-only document and written back after optional cleanup finishes.
 - Notes begin in Scratchpad or in the folder selected before creation.
 - Folders can be created, nested, and renamed.
 - Desktop and mobile use the same note-taking workflow.
@@ -70,6 +72,13 @@ agent endpoint and model configuration, and the browser uses the same-origin
 AgenticScribe API. When
 automatic cleanup is enabled, only the newly submitted thought is sent to the
 deployment-managed endpoint; the original is retained with the note.
+
+Local Markdown file handles, recovery text, and link state remain in a separate
+browser-local IndexedDB database. They are never sent through the notebook API
+or stored in SQLite, so other devices do not see those files. Removing a local
+file link never deletes the source file. Browser permission may need to be
+granted again after a restart. See
+[`docs/architecture/local-markdown-files.md`](docs/architecture/local-markdown-files.md).
 
 Production configuration requires a private listener, an exact canonical
 origin, a protected data directory, deployment-owned

@@ -77,6 +77,49 @@ button {
 	transform: translateY(-1px);
 }
 
+.open-markdown {
+	width: 100%;
+	margin: -15px 0 24px;
+	border: 0;
+	background: transparent;
+	padding: 7px 10px;
+	color: var(--sidebar-muted);
+	text-align: left;
+	cursor: pointer;
+}
+
+.open-markdown:hover,
+.open-markdown:focus-visible {
+	color: var(--sidebar-ink);
+	outline: 2px solid #c7b895;
+	outline-offset: 2px;
+}
+
+.local-file-row {
+	display: flex;
+	align-items: center;
+}
+
+.local-file-row .note-link {
+	min-width: 0;
+}
+
+.unlink-local-file {
+	border: 0;
+	border-radius: 5px;
+	background: transparent;
+	padding: 5px 8px;
+	color: var(--sidebar-muted);
+	cursor: pointer;
+}
+
+.unlink-local-file:hover,
+.unlink-local-file:focus-visible {
+	background: var(--sidebar-hover);
+	color: var(--sidebar-ink);
+	outline: 0;
+}
+
 .new-note:focus-visible,
 .sidebar-item:focus-visible,
 .note-link:focus-visible,

@@ -321,6 +321,30 @@ describe('NotebookStore', () => {
 		expect(await store.listNotes()).toHaveLength(1);
 	});
 
+	it('round-trips Markdown source through synchronization without rewriting syntax', async () => {
+		const store = createStore();
+		const markdown = '---\ntitle: Café\n---\n\n# Heading\n\n- [x] Item\n\n```ts\nconst value = 1;\n```\n';
+		const note: CommittedNote = {
+			id: 'markdown-note',
+			text: markdown,
+			thoughts: [{ id: 'markdown-thought', end: markdown.length }],
+			location: SCRATCHPAD
+		};
+		let uploaded: CommittedNote | undefined;
+
+		await store.commitNote(note);
+		await store.synchronize({
+			async snapshot() { return { schemaVersion: 1, notes: [], folders: [] }; },
+			async applyMutation(mutation) {
+				if (mutation.type === 'put-note') uploaded = mutation.note;
+				return { status: 'applied', entityVersion: 1 };
+			}
+		});
+
+		expect(uploaded?.text).toBe(markdown);
+		expect((await store.loadNote(note.id))?.text).toBe(markdown);
+	});
+
 	it('updates one note without overwriting another note', async () => {
 		const store = createStore();
 		await store.commitNote({

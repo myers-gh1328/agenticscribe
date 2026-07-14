@@ -8,6 +8,14 @@ import {
 } from './notebook-store';
 import { HttpNotebookRemote } from './notebook-remote';
 import { appendThought, applyThoughtCleanup } from './thoughts';
+import {
+	BrowserMarkdownFile,
+	LocalFilePermissionError,
+	pickLocalMarkdownHandle,
+	supportsLocalMarkdownFiles
+} from './browser-markdown-file';
+import { LocalMarkdownConflictError, LocalMarkdownDocument } from './local-markdown-document';
+import { LocalMarkdownStore, type LocalMarkdownBinding } from './local-markdown-store';
 
 interface NotebookNote {
 	id: string;
@@ -21,6 +29,9 @@ const editor = requireElement<HTMLTextAreaElement>('#editor');
 const state = requireElement<HTMLElement>('#capture-state');
 const stateText = requireElement<HTMLElement>('#state-text');
 const newNote = requireElement<HTMLButtonElement>('#new-note');
+const openMarkdown = requireElement<HTMLButtonElement>('#open-markdown');
+const localFilesSection = requireElement<HTMLElement>('#local-files-section');
+const localFilesList = requireElement<HTMLElement>('#local-files-list');
 const sidebarToggle = requireElement<HTMLButtonElement>('#sidebar-toggle');
 const notesList = requireElement<HTMLElement>('#notes-list');
 const emptyLocation = requireElement<HTMLElement>('#empty-location');
@@ -35,6 +46,7 @@ const confirmDelete = requireElement<HTMLButtonElement>('#confirm-delete');
 const workspace = requireElement<HTMLElement>('.workspace');
 const setupPage = requireElement<HTMLElement>('#setup-page');
 const store = new NotebookStore({ databaseName: 'agenticscribe' });
+const localMarkdownStore = new LocalMarkdownStore();
 const remote = new HttpNotebookRemote();
 let syncQueue = Promise.resolve(false);
 let syncConflict = false;
@@ -42,6 +54,8 @@ let serverDurable = await synchronizeNotebook();
 let folders: StoredFolder[] = await store.listFolders();
 const storedNotes = await store.listNotes();
 const storedDrafts = await store.listDrafts();
+let localBindings = await localMarkdownStore.list();
+let activeLocal: { binding: LocalMarkdownBinding; document: LocalMarkdownDocument } | undefined;
 let notes: NotebookNote[] = storedNotes.map((note) => ({
 	id: note.id,
 	savedText: note.text,
@@ -83,6 +97,97 @@ function currentText(note: NotebookNote) {
 
 function noteTitle(note: NotebookNote) {
 	return currentText(note).split('\n').map((line) => line.trim()).find(Boolean) || 'Untitled note';
+}
+
+function localRecovery(binding: LocalMarkdownBinding) {
+	return {
+		save: (text: string) => localMarkdownStore.saveRecovery(binding.id, text),
+		clear: (text: string) => localMarkdownStore.clearRecovery(binding.id, text)
+	};
+}
+
+async function activateLocalFile(binding: LocalMarkdownBinding, requestPermission = false) {
+	const current = activeNote();
+	if (!activeLocal && current) drafts.set(current.id, editor.value);
+	const file = new BrowserMarkdownFile(binding.handle);
+	try {
+		if (requestPermission) await file.requestAccess();
+		const document = await LocalMarkdownDocument.open(file, localRecovery(binding));
+		activeLocal = { binding, document };
+		editor.value = binding.recoveryText ?? document.text;
+		state.classList.remove('saved');
+		stateText.textContent = binding.recoveryText
+			? 'Recovered local edits — press Enter to save'
+			: 'Local file — changes stay on this device';
+		renderLocation();
+		renderLocalFiles();
+		fitEditor();
+		editor.focus();
+	} catch (error) {
+		state.classList.remove('saved');
+		stateText.textContent = error instanceof LocalFilePermissionError
+			? 'Permission needed — select the local file again'
+			: 'Local file unavailable — recovery preserved';
+	}
+}
+
+function renderLocalFiles() {
+	localFilesSection.hidden = localBindings.length === 0;
+	localFilesList.replaceChildren();
+	for (const binding of localBindings) {
+		const row = document.createElement('div');
+		row.className = 'local-file-row';
+		const button = document.createElement('button');
+		button.type = 'button';
+		button.className = 'note-link';
+		button.classList.toggle('active', activeLocal?.binding.id === binding.id);
+		button.textContent = binding.name;
+		button.addEventListener('click', () => void activateLocalFile(binding, true));
+		const unlink = document.createElement('button');
+		unlink.type = 'button';
+		unlink.className = 'unlink-local-file';
+		unlink.setAttribute('aria-label', `Unlink ${binding.name}`);
+		unlink.textContent = '×';
+		unlink.addEventListener('click', async () => {
+			await localMarkdownStore.remove(binding.id);
+			localBindings = localBindings.filter((candidate) => candidate.id !== binding.id);
+			if (activeLocal?.binding.id === binding.id) {
+				activeLocal = undefined;
+				const note = activeNote();
+				editor.value = note ? currentText(note) : '';
+				stateText.textContent = note?.persisted ? savedStateText() : 'Nothing saved yet';
+			}
+			renderLocalFiles();
+			renderLocation();
+		});
+		row.append(button, unlink);
+		localFilesList.append(row);
+	}
+}
+
+async function openLocalMarkdown() {
+	try {
+		const handle = await pickLocalMarkdownHandle();
+		const file = new BrowserMarkdownFile(handle);
+		await file.requestAccess();
+		const document = await LocalMarkdownDocument.open(file, {
+			save: async () => undefined,
+			clear: async () => undefined
+		});
+		const binding: LocalMarkdownBinding = {
+			id: `local-${crypto.randomUUID()}`,
+			name: handle.name,
+			handle,
+			text: document.text,
+			recoveryText: null
+		};
+		await localMarkdownStore.bind(binding);
+		localBindings = [binding, ...localBindings];
+		await activateLocalFile(binding);
+	} catch (error) {
+		if (error instanceof DOMException && error.name === 'AbortError') return;
+		stateText.textContent = 'Could not open the local Markdown file';
+	}
 }
 
 function locationLabel(id: string) {
@@ -294,7 +399,7 @@ function renderNotes() {
 		row.className = 'note-row';
 		const link = document.createElement('button');
 		link.className = 'note-link';
-		link.classList.toggle('active', note.id === activeNoteId);
+		link.classList.toggle('active', !activeLocal && note.id === activeNoteId);
 		link.type = 'button';
 		link.draggable = true;
 		const titleWrap = document.createElement('span');
@@ -346,8 +451,10 @@ function renderLocation() {
 }
 
 function selectNote(noteId: string) {
+	const wasLocal = activeLocal;
+	activeLocal = undefined;
 	const current = activeNote();
-	if (current) drafts.set(current.id, editor.value);
+	if (current && !wasLocal) drafts.set(current.id, editor.value);
 	const next = notes.find((note) => note.id === noteId);
 	if (!next) return;
 	activeNoteId = noteId;
@@ -356,14 +463,17 @@ function selectNote(noteId: string) {
 	state.classList.remove('saved');
 	stateText.textContent = next.persisted ? savedStateText() : 'Nothing saved yet';
 	renderLocation();
+	renderLocalFiles();
 	document.body.classList.remove('sidebar-open');
 	fitEditor();
 	editor.focus();
 }
 
 function createNewNote() {
+	const wasLocal = activeLocal;
+	activeLocal = undefined;
 	const current = activeNote();
-	if (current) drafts.set(current.id, editor.value);
+	if (current && !wasLocal) drafts.set(current.id, editor.value);
 	if (current && !current.persisted && !currentText(current).trim()) {
 		current.location = selectedLocation;
 		renderLocation();
@@ -379,6 +489,7 @@ function createNewNote() {
 	state.classList.remove('saved');
 	stateText.textContent = 'Nothing saved yet';
 	renderLocation();
+	renderLocalFiles();
 	document.body.classList.remove('sidebar-open');
 	fitEditor();
 	editor.focus();
@@ -557,11 +668,50 @@ else {
 	stateText.textContent = savedStateText();
 }
 renderFolders();
+openMarkdown.hidden = !supportsLocalMarkdownFiles();
+renderLocalFiles();
 
 editor.addEventListener('keydown', (event) => {
 	if (event.key !== 'Enter' || event.shiftKey) return;
 	event.preventDefault();
 	const note = activeNote();
+	if (activeLocal) {
+		const local = activeLocal;
+		const submittedText = editor.value.endsWith('\n') ? editor.value : `${editor.value}\n`;
+		editor.value = submittedText;
+		editor.disabled = true;
+		state.classList.remove('saved');
+		stateText.textContent = agentSetup.agent && agentSetup.automaticCleanupEnabled
+			? 'Correcting before saving to file…'
+			: 'Saving to local file…';
+		void local.document.commit(
+			submittedText,
+			agentSetup.agent && agentSetup.automaticCleanupEnabled
+				? (thought) => agentSetup.agent!.cleanThought(thought)
+				: undefined
+		).then((result) => {
+			editor.value = result.text;
+			local.binding.text = result.text;
+			local.binding.recoveryText = null;
+			state.classList.add('saved');
+			stateText.textContent = result.cleanup === 'failed'
+				? 'Cleanup failed — original saved to local file'
+				: 'Saved to local file';
+		}).catch((error) => {
+			local.binding.recoveryText = submittedText;
+			state.classList.remove('saved');
+			stateText.textContent = error instanceof LocalMarkdownConflictError
+				? 'File changed elsewhere — local edit preserved'
+				: error instanceof LocalFilePermissionError
+				? 'Permission needed — local edit preserved'
+				: 'File save failed — local edit preserved';
+		}).finally(() => {
+			editor.disabled = false;
+			fitEditor();
+			editor.focus();
+		});
+		return;
+	}
 	if (!note) return;
 	const submittedText = editor.value.endsWith('\n') ? editor.value : `${editor.value}\n`;
 	editor.value = submittedText;
@@ -590,6 +740,13 @@ editor.addEventListener('keydown', (event) => {
 });
 
 editor.addEventListener('input', () => {
+	if (activeLocal) {
+		activeLocal.binding.recoveryText = editor.value;
+		void localMarkdownStore.saveRecovery(activeLocal.binding.id, editor.value);
+		renderLocalFiles();
+		fitEditor();
+		return;
+	}
 	const note = activeNote();
 	if (note) {
 		drafts.set(note.id, editor.value);
@@ -600,6 +757,7 @@ editor.addEventListener('input', () => {
 });
 
 newNote.addEventListener('click', createNewNote);
+openMarkdown.addEventListener('click', () => void openLocalMarkdown());
 cancelDelete.addEventListener('click', closeDeleteDialog);
 confirmDelete.addEventListener('click', () => {
 	const noteId = pendingDeleteNoteId;

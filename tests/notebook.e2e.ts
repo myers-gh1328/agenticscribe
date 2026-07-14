@@ -176,6 +176,51 @@ test('a failed cleanup keeps the submitted thought unchanged', async ({ page }) 
 	await expect(editor).toHaveValue('keep this raw thought\n');
 });
 
+test('a local Markdown file writes locally without creating a notebook mutation', async ({ page }) => {
+	let notebookMutations = 0;
+	await page.route('**/api/notebook', async (route) => {
+		if (route.request().method() === 'POST') notebookMutations += 1;
+		await route.continue();
+	});
+	await page.addInitScript(() => {
+		Object.defineProperty(window, 'showOpenFilePicker', {
+			configurable: true,
+			value: async () => {
+				const root = await navigator.storage.getDirectory();
+				const handle = await root.getFileHandle('local-notes.md', { create: true });
+				const writable = await handle.createWritable();
+				await writable.write('# Local notes\n');
+				await writable.close();
+				const permissionTarget = Object.getPrototypeOf(handle) as FileSystemFileHandle & {
+					queryPermission?: () => Promise<PermissionState>;
+					requestPermission?: () => Promise<PermissionState>;
+				};
+				permissionTarget.queryPermission = async () => 'granted';
+				permissionTarget.requestPermission = async () => 'granted';
+				return [handle];
+			}
+		});
+	});
+	await page.reload();
+
+	await openOrganizer(page);
+	await page.getByRole('button', { name: 'Open .md file' }).click();
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await expect(editor).toHaveValue('# Local notes\n');
+	await editor.press('End');
+	await editor.type('Saved only here');
+	await editor.press('Enter');
+	await expect(page.getByRole('status')).toContainText('Saved to local file');
+
+	const fileText = await page.evaluate(async () => {
+		const root = await navigator.storage.getDirectory();
+		const handle = await root.getFileHandle('local-notes.md');
+		return (await handle.getFile()).text();
+	});
+	expect(fileText).toBe('# Local notes\nSaved only here\n');
+	expect(notebookMutations).toBe(0);
+});
+
 test('Enter commits a note and reload restores only committed text', async ({ page }) => {
 	await saveThought(page, 'First saved thought');
 	await openOrganizer(page);

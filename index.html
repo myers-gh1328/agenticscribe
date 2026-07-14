@@ -10,6 +10,7 @@
 			<aside class="sidebar" aria-label="Notebook organization">
 				<h1 class="brand">AgenticScribe</h1>
 				<button class="new-note" id="new-note" type="button">＋ New note</button>
+				<button class="open-markdown" id="open-markdown" type="button" hidden>Open .md file</button>
 
 				<nav aria-label="Notes and folders">
 					<section class="sidebar-section">
@@ -28,10 +29,15 @@
 						<div id="folder-list"></div>
 					</section>
 
-				<section class="sidebar-section" aria-labelledby="notes-label">
+					<section class="sidebar-section" aria-labelledby="notes-label">
 						<h2 class="section-label" id="notes-label"><span id="location-name">Scratchpad</span> notes</h2>
 						<div id="notes-list"></div>
 						<p class="empty-location" id="empty-location" hidden>No notes here yet.</p>
+					</section>
+
+					<section class="sidebar-section" id="local-files-section" aria-labelledby="local-files-label" hidden>
+						<h2 class="section-label" id="local-files-label">Local files</h2>
+						<div id="local-files-list"></div>
 					</section>
 				</nav>
 

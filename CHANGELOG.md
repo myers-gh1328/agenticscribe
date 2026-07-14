@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserve Markdown source and local-file line-ending/BOM conventions.
+- Add local-only `.md` file editing with correction-before-write, recoverable failures, external-change detection, and no notebook synchronization.
 - Added an authoritative versioned SQLite note store behind a private,
   identity-scoped mutation API.
 - Kept IndexedDB as an offline cache/outbox, including legacy-data migration,
