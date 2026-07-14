@@ -160,7 +160,7 @@ async function handleAgentRequest({
 }) {
 	const authorization = requiredCapability
 		? authorizeTailscaleRequest(request, requiredCapability, 'owner')
-		: { ok: false, status: 503, error: 'agent_unavailable' };
+		: { ok: true };
 	if (!authorization.ok) {
 		respondJson(response, authorization.status, { error: authorization.error }, request.method);
 		return;
@@ -360,11 +360,13 @@ async function handleNotebookRequest({
 	requiredCapability,
 	maxBodyBytes
 }) {
-	if (!database || !canonicalOrigin || !requiredCapability) {
+	if (!database || !canonicalOrigin) {
 		respondJson(response, 503, { error: 'notebook_unavailable' }, request.method);
 		return;
 	}
-	const authorization = authorizeTailscaleRequest(request, requiredCapability);
+	const authorization = requiredCapability
+		? authorizeTailscaleRequest(request, requiredCapability)
+		: { ok: true, ownerId: 'local-owner' };
 	if (!authorization.ok) {
 		respondJson(response, authorization.status, { error: authorization.error }, request.method);
 		return;

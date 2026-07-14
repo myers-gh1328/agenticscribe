@@ -19,11 +19,11 @@ outbox; it is not the authoritative or only copy.
 
 ## Ownership And Data Flow
 
-The Node server owns a SQLite database at a deployment-configured path. It
-listens on loopback only. Tailscale Serve provides the one canonical HTTPS
-origin, strips spoofed identity headers, and forwards an explicitly granted
-AgenticScribe app capability. Every `/api/notebook` request fails closed unless
-that capability is present. Direct LAN and raw Tailscale-IP access are removed.
+The Node server owns a SQLite database at a deployment-configured path. It can
+listen on a trusted private LAN or on loopback behind Tailscale Serve. A
+Tailscale deployment supplies verified identity and an explicitly granted
+AgenticScribe app capability. A LAN deployment leaves capability enforcement
+unset and stores records under one deployment-local owner.
 
 The server exposes a same-origin `/api/notebook` contract. The browser store
 applies a mutation locally and records/coalesces its IndexedDB outbox entry in
@@ -53,11 +53,11 @@ is not immediate in historical encrypted snapshots.
 
 The browser also uses a narrow same-origin `/api/agent` contract. The server,
 not the browser, owns the OpenAI-compatible base URL, installed model ID,
-cleanup prompt, timeouts, and upstream request shape. Status probes and cleanup
-requests require the verified Tailscale identity and AgenticScribe capability;
-cleanup additionally requires the canonical Origin, same-origin Fetch Metadata,
-and bounded JSON. The API is not a generic completion proxy and never accepts a
-caller-selected endpoint, model, prompt, or messages array.
+cleanup prompt, timeouts, and upstream request shape. Deployments can require
+verified Tailscale identity and capability headers or disable that gate on a
+trusted private LAN. Cleanup always requires the canonical Origin, same-origin
+Fetch Metadata, and bounded JSON. The API is not a generic completion proxy and
+never accepts a caller-selected endpoint, model, prompt, or messages array.
 
 ## Initial Browser Migration
 
@@ -81,11 +81,11 @@ the server version to the cached entity.
 - Database writes, mutation receipt, and entity version changes share one
   SQLite transaction.
 - Server errors and offline state never delete the IndexedDB cache or outbox.
-- The server binds to loopback and accepts notebook API calls only through
-  Tailscale Serve HTTPS with the required app capability; no public route is
-  added.
-- State-changing requests require exact Host and Origin, JSON content type, and
-  Fetch Metadata checks in addition to Tailscale identity authorization.
+- The server accepts notebook API calls only through its configured private
+  origin; no public route is added.
+- State-changing requests require exact Origin, JSON content type, and Fetch
+  Metadata checks. Tailscale deployments additionally require identity and
+  capability authorization.
 - Logs use an allowlist of event, outcome, request ID, opaque mutation ID,
   latency, and status. They never serialize request bodies, note/folder
   content, cookies, authorization/identity headers, query strings, stack
@@ -125,9 +125,11 @@ restore.
 
 ## Access And Request Limits
 
-- Canonical origin: Tailscale Serve HTTPS only; backend `127.0.0.1:3014`.
-- Authorization: required AgenticScribe Tailscale app capability on every API
-  request; missing identity/capability returns `401`/`403`.
+- Canonical origin: exact deployment-owned private LAN HTTP or Tailscale Serve
+  HTTPS origin.
+- Authorization: Tailscale deployments require the AgenticScribe app
+  capability. Trusted LAN deployments use one deployment-local owner and rely
+  on private-network access plus exact-origin write checks.
 - Maximum JSON request body: 1 MiB, including chunked requests.
 - Maximum note text: 256 KiB; maximum 10,000 notes and 5,000 folders.
 - Snapshot pages: at most 500 entities with an opaque cursor.
@@ -139,8 +141,8 @@ restore.
 ## Rollout And Rollback
 
 1. Publish a full runtime release containing server and static assets. Deploy
-   the API with sync disabled, loopback binding, Tailscale Serve identity
-   enforcement, and liveness/readiness checks.
+   the API with sync disabled, the selected private listener and authorization
+   mode, and liveness/readiness checks.
 2. Provision the protected data directory and dedicated encrypted backup job.
    Prove an empty/disposable backup and restore before accepting durable writes.
 3. Enable one canary browser import. Preserve its original IndexedDB, verify
@@ -172,7 +174,7 @@ recovery when a prior runtime cannot safely use the current schema.
   divergent multi-profile imports, conflict preservation, and remote refresh.
 - Playwright: cross-context persistence through the server and offline-to-online
   synchronization.
-- Deployment: unauthorized requests fail, canonical HTTPS identity succeeds,
-  loopback-only binding, liveness/readiness, SQLite path/permissions/disk/WAL,
+- Deployment: configured authorization mode, canonical-origin enforcement,
+  private binding, liveness/readiness, SQLite path/permissions/disk/WAL,
   full-runtime release metadata, LaunchAgent environment, content-free logs,
   backup freshness, and disposable restore verification.
