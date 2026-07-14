@@ -28,6 +28,7 @@ export async function startStaticServer({
 	agentBaseUrl,
 	agentModel,
 	agentFetch = fetch,
+	agentEvent = (event) => console.warn(JSON.stringify(event)),
 	agentConnectTimeoutMs = 5_000,
 	agentCleanupTimeoutMs = 30_000,
 	maxAgentBodyBytes = 16 * 1024,
@@ -64,6 +65,7 @@ export async function startStaticServer({
 					requiredCapability,
 					canonicalOrigin,
 					agentFetch,
+					agentEvent,
 					agentConnectTimeoutMs,
 					agentCleanupTimeoutMs,
 					maxAgentBodyBytes,
@@ -148,6 +150,7 @@ async function handleAgentRequest({
 	requiredCapability,
 	canonicalOrigin,
 	agentFetch,
+	agentEvent,
 	agentConnectTimeoutMs,
 	agentCleanupTimeoutMs,
 	maxAgentBodyBytes,
@@ -172,8 +175,9 @@ async function handleAgentRequest({
 			respondJson(response, 503, { error: 'agent_unavailable' }, request.method);
 			return;
 		}
-		const available = await probeAgent({ agent, agentFetch, timeoutMs: agentConnectTimeoutMs, maxAgentResponseBytes });
-		respondJson(response, 200, { configured: true, available, model: agent.model }, request.method);
+		const probe = await probeAgent({ agent, agentFetch, timeoutMs: agentConnectTimeoutMs, maxAgentResponseBytes });
+		if (!probe.available) agentEvent({ event: 'agent_status_probe_failed', outcome: probe.outcome });
+		respondJson(response, 200, { configured: true, available: probe.available, model: agent.model }, request.method);
 		return;
 	}
 
@@ -243,17 +247,23 @@ async function handleAgentRequest({
 }
 
 async function probeAgent({ agent, agentFetch, timeoutMs, maxAgentResponseBytes }) {
+	let response;
 	try {
-		const response = await agentFetch(`${agent.baseUrl}/models`, {
+		response = await agentFetch(`${agent.baseUrl}/models`, {
 			headers: { Accept: 'application/json' },
 			redirect: 'error',
 			signal: AbortSignal.timeout(timeoutMs)
 		});
-		if (!response.ok) return false;
+	} catch (error) {
+		return { available: false, outcome: error?.name === 'TimeoutError' ? 'timeout' : 'network_error' };
+	}
+	if (!response.ok) return { available: false, outcome: 'upstream_status' };
+	try {
 		const result = await readBoundedResponseJson(response, maxAgentResponseBytes);
-		return result.data?.some((candidate) => candidate?.id === agent.model) === true;
+		const available = result.data?.some((candidate) => candidate?.id === agent.model) === true;
+		return { available, outcome: available ? 'available' : 'model_missing' };
 	} catch {
-		return false;
+		return { available: false, outcome: 'invalid_response' };
 	}
 }
 
