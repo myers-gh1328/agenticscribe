@@ -85,16 +85,17 @@ test('an offline commit syncs after reconnect and survives a new browser profile
 	}
 });
 
-test('local agent setup is reachable from the notebook and returns without changing notes', async ({
+test('deployment-managed agent setup is reachable without browser-owned connection fields', async ({
 	page
 }) => {
 	await saveThought(page, 'Keep this note');
 	await openOrganizer(page);
 	await page.getByRole('button', { name: 'Agent setup' }).click();
 
-	await expect(page.getByRole('heading', { name: 'Connect your local agent' })).toBeVisible();
-	await expect(page.getByLabel('Base URL')).toHaveValue('http://192.168.4.43:8080/v1');
-	await expect(page.getByLabel('Model')).toHaveValue('mlx-community/gemma-4-e4b-it-8bit');
+	await expect(page.getByRole('heading', { name: 'Use your deployment agent' })).toBeVisible();
+	await expect(page.getByLabel('Base URL')).toHaveCount(0);
+	await expect(page.getByLabel('Model')).toHaveCount(0);
+	await expect(page.getByText('Connection and model routing are managed by this deployment.')).toBeVisible();
 	await expect(page.getByText('Not connected', { exact: true })).toBeVisible();
 
 	await page.getByRole('button', { name: 'Back to notes' }).click();
@@ -102,26 +103,11 @@ test('local agent setup is reachable from the notebook and returns without chang
 });
 
 test('connecting the local agent cleans only a thought after it is saved', async ({ page }) => {
-	let modelRequests = 0;
-	await page.route('**/v1/models', async (route) => {
-		modelRequests += 1;
-		if (route.request().method() === 'OPTIONS') {
-			await route.fulfill({
-				status: 204,
-				headers: {
-					'Access-Control-Allow-Origin': '*',
-					'Access-Control-Allow-Methods': 'GET, OPTIONS',
-					'Access-Control-Allow-Private-Network': 'true'
-				}
-			});
-			return;
-		}
+	let statusRequests = 0;
+	await page.route('**/api/agent/status', async (route) => {
+		statusRequests += 1;
 		await route.fulfill({
-			headers: {
-				'Access-Control-Allow-Origin': '*',
-				'Access-Control-Allow-Private-Network': 'true'
-			},
-			json: { data: [{ id: 'mlx-community/gemma-4-e4b-it-8bit' }] }
+			json: { configured: true, available: true, model: 'deployment-model' }
 		});
 	});
 	let releaseCleanup!: () => void;
@@ -132,40 +118,20 @@ test('connecting the local agent cleans only a thought after it is saved', async
 	const cleanupRequest = new Promise<void>((resolve) => {
 		cleanupRequested = resolve;
 	});
-	await page.route('**/v1/chat/completions', async (route) => {
-		if (route.request().method() === 'OPTIONS') {
-			await route.fulfill({
-				status: 204,
-				headers: {
-					'Access-Control-Allow-Origin': '*',
-					'Access-Control-Allow-Headers': 'Content-Type',
-					'Access-Control-Allow-Methods': 'POST, OPTIONS',
-					'Access-Control-Allow-Private-Network': 'true'
-				}
-			});
-			return;
-		}
+	await page.route('**/api/agent/cleanup', async (route) => {
 		const requestBody = route.request().postDataJSON();
-		expect(requestBody.messages.at(-1)).toEqual({
-			role: 'user',
-			content: 'this thought have bad grammer.'
-		});
+		expect(requestBody).toEqual({ thought: 'this thought have bad grammer.' });
 		cleanupRequested();
 		await cleanupReleased;
-		await route.fulfill({
-			headers: {
-				'Access-Control-Allow-Origin': '*',
-				'Access-Control-Allow-Private-Network': 'true'
-			},
-			json: { choices: [{ message: { content: 'This thought has bad grammar.' } }] }
-		});
+		await route.fulfill({ json: { cleanedThought: 'This thought has bad grammar.' } });
 	});
 
 	await openOrganizer(page);
 	await page.getByRole('button', { name: 'Agent setup' }).click();
-	await page.getByRole('button', { name: 'Save & connect' }).click();
-	await expect.poll(() => modelRequests).toBeGreaterThan(0);
+	await page.getByRole('button', { name: 'Test connection' }).click();
+	await expect.poll(() => statusRequests).toBeGreaterThan(0);
 	await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+	await expect(page.getByText('deployment-model', { exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Back to notes' }).click();
 
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
@@ -182,23 +148,21 @@ test('connecting the local agent cleans only a thought after it is saved', async
 });
 
 test('a failed cleanup keeps the submitted thought unchanged', async ({ page }) => {
-	await page.route('**/v1/models', async (route) => {
+	await page.route('**/api/agent/status', async (route) => {
 		await route.fulfill({
-			headers: { 'Access-Control-Allow-Origin': '*' },
-			json: { data: [{ id: 'mlx-community/gemma-4-e4b-it-8bit' }] }
+			json: { configured: true, available: true, model: 'deployment-model' }
 		});
 	});
-	await page.route('**/v1/chat/completions', async (route) => {
+	await page.route('**/api/agent/cleanup', async (route) => {
 		await route.fulfill({
 			status: 500,
-			headers: { 'Access-Control-Allow-Origin': '*' },
 			json: { error: 'synthetic failure' }
 		});
 	});
 
 	await openOrganizer(page);
 	await page.getByRole('button', { name: 'Agent setup' }).click();
-	await page.getByRole('button', { name: 'Save & connect' }).click();
+	await page.getByRole('button', { name: 'Test connection' }).click();
 	await expect(page.getByText('Connected', { exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Back to notes' }).click();
 

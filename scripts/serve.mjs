@@ -14,6 +14,10 @@ const server = await startStaticServer({
 	databasePath,
 	syncEnabled: process.env.AGENTIC_SCRIBE_SYNC_ENABLED === 'true',
 	canonicalOrigin: process.env.AGENTIC_SCRIBE_CANONICAL_ORIGIN,
-	requiredCapability: process.env.AGENTIC_SCRIBE_REQUIRED_CAPABILITY
+	requiredCapability: process.env.AGENTIC_SCRIBE_REQUIRED_CAPABILITY,
+	agentBaseUrl: process.env.AGENTIC_SCRIBE_AGENT_BASE_URL,
+	agentModel: process.env.AGENTIC_SCRIBE_AGENT_MODEL,
+	agentConnectTimeoutMs: Number(process.env.AGENTIC_SCRIBE_AGENT_CONNECT_TIMEOUT_MS ?? '5000'),
+	agentCleanupTimeoutMs: Number(process.env.AGENTIC_SCRIBE_AGENT_CLEANUP_TIMEOUT_MS ?? '30000')
 });
 console.log(JSON.stringify({ event: 'agenticscribe_started', url: server.url }));

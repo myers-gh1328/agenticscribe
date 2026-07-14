@@ -13,7 +13,7 @@ cache and mutation outbox.
 - Notes begin in Scratchpad or in the folder selected before creation.
 - Folders can be created, nested, and renamed.
 - Desktop and mobile use the same note-taking workflow.
-- A local OpenAI-compatible agent can be configured from Agent setup.
+- A deployment-managed OpenAI-compatible agent can be checked from Agent setup.
 - When enabled, Enter saves the raw thought first and then sends only that thought for spelling and grammar cleanup.
 - Failed cleanup leaves the original thought unchanged and does not retry automatically.
 
@@ -63,14 +63,16 @@ Host-specific paths, ports, restart commands, and process-manager configuration 
 Notes and folders are stored authoritatively in SQLite and cached in IndexedDB
 for offline use. A committed offline mutation remains queued until the server
 acknowledges it. Concurrent server changes create an explicit local conflict;
-they do not silently overwrite the local copy. Local-agent connection settings
-remain browser-local. When automatic cleanup is enabled, only the newly
-submitted thought is sent to the configured local endpoint; the original is
-retained with the note.
+they do not silently overwrite the local copy. Only the automatic-cleanup
+preference remains browser-local. The server owns the agent endpoint and model
+configuration, and the browser uses the same-origin AgenticScribe API. When
+automatic cleanup is enabled, only the newly submitted thought is sent to the
+deployment-managed endpoint; the original is retained with the note.
 
 Production configuration requires a loopback listener behind Tailscale Serve,
 an exact canonical HTTPS origin, an application capability, a protected data
-directory, and a separately managed encrypted backup. See
+directory, deployment-owned `AGENTIC_SCRIBE_AGENT_BASE_URL` and
+`AGENTIC_SCRIBE_AGENT_MODEL` values, and a separately managed encrypted backup. See
 [`docs/architecture/durable-notes.md`](docs/architecture/durable-notes.md).
 
 Create an integrity-checked SQLite snapshot while the service is running:

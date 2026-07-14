@@ -51,6 +51,14 @@ mutation-receipt pruning is out of scope until clients have expiring durable
 synchronization cursors. Backup retention documentation explains that deletion
 is not immediate in historical encrypted snapshots.
 
+The browser also uses a narrow same-origin `/api/agent` contract. The server,
+not the browser, owns the OpenAI-compatible base URL, installed model ID,
+cleanup prompt, timeouts, and upstream request shape. Status probes and cleanup
+requests require the verified Tailscale identity and AgenticScribe capability;
+cleanup additionally requires the canonical Origin, same-origin Fetch Metadata,
+and bounded JSON. The API is not a generic completion proxy and never accepts a
+caller-selected endpoint, model, prompt, or messages array.
+
 ## Initial Browser Migration
 
 Existing IndexedDB notes and folders have no server version. The first sync
@@ -82,6 +90,8 @@ the server version to the cached entity.
   latency, and status. They never serialize request bodies, note/folder
   content, cookies, authorization/identity headers, query strings, stack
   traces, or database paths.
+- Agent failures never roll back the raw committed thought, retry automatically,
+  expose upstream routing, or make notebook readiness depend on model availability.
 
 ## Failure States
 

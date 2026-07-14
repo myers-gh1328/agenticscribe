@@ -67,8 +67,8 @@
 			<main class="setup-page" id="setup-page" hidden>
 				<section class="setup-sheet" aria-labelledby="setup-title">
 					<button class="setup-back" id="close-agent-setup" type="button">← Back to notes</button>
-					<p class="setup-eyebrow">Local AI · this device only</p>
-					<h2 id="setup-title">Connect your local agent</h2>
+					<p class="setup-eyebrow">Private AI · deployment managed</p>
+					<h2 id="setup-title">Use your deployment agent</h2>
 					<p class="setup-intro">
 						AgenticScribe will send only a newly saved thought to the agent for spelling and grammar cleanup.
 						Your original thought stays preserved.
@@ -81,17 +81,10 @@
 								<span class="status-pill" id="agent-status" role="status">Not connected</span>
 							</div>
 
-							<label class="setup-field">
-								<span>Base URL</span>
-								<input name="baseUrl" type="url" value="http://192.168.4.43:8080/v1" required />
-							</label>
-
-							<label class="setup-field">
-								<span>Model</span>
-								<select name="model">
-									<option value="mlx-community/gemma-4-e4b-it-8bit">mlx-community/gemma-4-e4b-it-8bit</option>
-								</select>
-							</label>
+							<p class="deployment-detail">
+								Connection and model routing are managed by this deployment.
+								<span id="agent-model">Configured by the operator</span>
+							</p>
 
 							<label class="setup-option">
 								<input name="automaticCleanup" type="checkbox" checked />
@@ -103,11 +96,11 @@
 						</div>
 
 						<p class="privacy-note">
-							Connection details stay in this browser. AgenticScribe continues to take notes when the agent is unavailable.
+							Only the automatic-cleanup preference stays in this browser. AgenticScribe continues to take notes when the agent is unavailable.
 						</p>
 						<div class="setup-actions">
-							<p>Nothing is sent until you connect.</p>
-							<button class="connect-agent" type="submit">Save &amp; connect</button>
+							<p>Only newly saved thoughts are sent for cleanup.</p>
+							<button class="connect-agent" type="submit">Test connection</button>
 						</div>
 					</form>
 				</section>
