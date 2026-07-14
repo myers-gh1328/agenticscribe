@@ -124,7 +124,9 @@ describe('static server', () => {
 			requiredCapability: 'aegirtech.dev/cap/agenticscribe',
 			agentBaseUrl: 'http://127.0.0.1:1/v1',
 			agentModel: 'deployment-model',
-			agentFetch: vi.fn().mockRejectedValue(new TypeError('synthetic network failure')),
+			agentFetch: vi.fn().mockRejectedValue(
+				new TypeError('synthetic network failure', { cause: { code: 'EACCES' } })
+			),
 			agentEvent
 		});
 		cleanup.push(async () => {
@@ -144,7 +146,8 @@ describe('static server', () => {
 		expect(await response.json()).toMatchObject({ configured: true, available: false });
 		expect(agentEvent).toHaveBeenCalledWith({
 			event: 'agent_status_probe_failed',
-			outcome: 'network_error'
+			outcome: 'network_error',
+			code: 'EACCES'
 		});
 		expect(JSON.stringify(agentEvent.mock.calls)).not.toContain('owner@example.test');
 	});
