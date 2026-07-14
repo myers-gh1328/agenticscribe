@@ -8,6 +8,8 @@ verified object ID. Authorized users cannot read or mutate another user's
 notebook through the API.
 The browser also uses an object-ID-specific IndexedDB database so cached notes,
 drafts, and pending offline mutations are not reused by another signed-in user.
+The service worker caches only the application shell and static assets. It
+never caches or provides offline fallbacks for `/auth/*` or `/api/*` requests.
 
 Notes are not end-to-end encrypted. Anyone with access to the browser profile,
 host account, live database, or decrypted backup may be able to read them. Do

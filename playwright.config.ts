@@ -7,6 +7,9 @@ export default defineConfig({
 	testMatch: '**/*.e2e.ts',
 	fullyParallel: false,
 	workers: 1,
+	use: {
+		serviceWorkers: 'block'
+	},
 	webServer: {
 		command: 'npm run build && npm start',
 		port: 4173,

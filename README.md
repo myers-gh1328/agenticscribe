@@ -36,6 +36,15 @@ npm install
 npm run dev
 ```
 
+## Install
+
+On supported browsers, install AgenticScribe from the browser's app/install
+menu. On iOS and iPadOS, use Share → Add to Home Screen. The installed app
+caches its versioned application shell for offline launch. Authentication and
+`/api/*` responses are always network-only; offline note changes stay in the
+current Entra owner's partitioned IndexedDB outbox until reauthentication and
+connectivity are available.
+
 ## Verify
 
 ```sh

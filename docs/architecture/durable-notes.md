@@ -32,6 +32,13 @@ authenticated session and selects an object-ID-specific notebook database. This
 partitions the offline cache, drafts, and mutation outbox across account
 switches as well as partitioning authoritative SQLite rows.
 
+The installable PWA service worker precaches the built application shell and
+static install assets. Navigation falls back to that shell only when the
+network is unavailable. Authentication and API paths are explicitly
+network-only, so cached responses cannot bypass session validation or replay
+another owner's server data. Updated workers wait for the next normal app
+restart rather than forcibly replacing a page with an active draft or outbox.
+
 The server exposes a same-origin `/api/notebook` contract. The browser store
 applies a mutation locally and records/coalesces its IndexedDB outbox entry in
 the same transaction. On startup and reconnect it drains each entity's outbox
