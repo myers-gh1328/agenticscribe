@@ -2,9 +2,11 @@ import { AgentSetup } from './agent-setup';
 import { requireElement } from './dom';
 import {
 	NotebookStore,
+	NotebookConflictError,
 	type StoredFolder,
 	type ThoughtBoundary
 } from './notebook-store';
+import { HttpNotebookRemote } from './notebook-remote';
 import { appendThought, applyThoughtCleanup } from './thoughts';
 
 interface NotebookNote {
@@ -33,6 +35,10 @@ const confirmDelete = requireElement<HTMLButtonElement>('#confirm-delete');
 const workspace = requireElement<HTMLElement>('.workspace');
 const setupPage = requireElement<HTMLElement>('#setup-page');
 const store = new NotebookStore({ databaseName: 'agenticscribe' });
+const remote = new HttpNotebookRemote();
+let syncQueue = Promise.resolve(false);
+let syncConflict = false;
+let serverDurable = await synchronizeNotebook();
 let folders: StoredFolder[] = await store.listFolders();
 let notes: NotebookNote[] = (await store.listNotes()).map((note) => ({
 	id: note.id,
@@ -124,6 +130,7 @@ function createFolderForm(parentId: string | null, depth: number, existingFolder
 		}
 		if (existingFolder) await store.renameFolder(existingFolder.id, name);
 		else await store.createFolder({ id: `folder-${crypto.randomUUID()}`, name, parentId });
+		serverDurable = await synchronizeNotebook();
 		folders = await store.listFolders();
 		creatingParentId = undefined;
 		renamingFolderId = undefined;
@@ -334,7 +341,7 @@ function selectNote(noteId: string) {
 	selectedLocation = next.location;
 	editor.value = currentText(next);
 	state.classList.remove('saved');
-	stateText.textContent = next.persisted ? 'Saved on this device' : 'Nothing saved yet';
+	stateText.textContent = next.persisted ? savedStateText() : 'Nothing saved yet';
 	renderLocation();
 	document.body.classList.remove('sidebar-open');
 	fitEditor();
@@ -368,16 +375,21 @@ async function moveNote(noteId: string, destination: string) {
 	const note = notes.find((candidate) => candidate.id === noteId);
 	if (!note) return;
 	note.location = destination;
-	if (note.persisted) await store.moveNote(note.id, destination);
+	if (note.persisted) {
+		await store.moveNote(note.id, destination);
+		serverDurable = await synchronizeNotebook();
+	}
 	selectedLocation = destination;
 	closeMoveMenus();
 	renderLocation();
 	clearTimeout(stateTimer);
 	state.classList.add('saved');
-	stateText.textContent = `Moved to ${locationLabel(destination)}`;
+	stateText.textContent = serverDurable
+		? `Moved to ${locationLabel(destination)} and saved to server`
+		: `Moved to ${locationLabel(destination)} offline — pending sync`;
 	stateTimer = setTimeout(() => {
 		state.classList.remove('saved');
-		stateText.textContent = note.persisted ? 'Saved on this device' : 'Nothing saved yet';
+		stateText.textContent = note.persisted ? savedStateText() : 'Nothing saved yet';
 	}, 1100);
 }
 
@@ -406,6 +418,7 @@ async function deleteNote(noteId: string) {
 	if (!deleted) return;
 	drafts.delete(noteId);
 	if (deleted.persisted) await store.deleteNote(noteId);
+	if (deleted.persisted) serverDurable = await synchronizeNotebook();
 	if (activeNoteId === noteId) {
 		const next = notes.find((note) => note.location === deleted.location) ?? notes[0];
 		activeNoteId = undefined;
@@ -419,10 +432,10 @@ async function deleteNote(noteId: string) {
 	}
 	clearTimeout(stateTimer);
 	state.classList.add('saved');
-	stateText.textContent = 'Note deleted';
+	stateText.textContent = serverDurable ? 'Note deleted from server' : 'Note deleted offline — pending sync';
 	stateTimer = setTimeout(() => {
 		state.classList.remove('saved');
-		stateText.textContent = activeNote()?.persisted ? 'Saved on this device' : 'Nothing saved yet';
+		stateText.textContent = activeNote()?.persisted ? savedStateText() : 'Nothing saved yet';
 	}, 1100);
 }
 
@@ -431,14 +444,38 @@ function fitEditor() {
 	editor.style.height = `${Math.max(window.innerHeight - 54, editor.scrollHeight)}px`;
 }
 
-function showSaved() {
+function showSaved(synchronized: boolean) {
 	clearTimeout(stateTimer);
 	state.classList.add('saved');
-	stateText.textContent = 'Thought saved on this device';
+	stateText.textContent = syncConflict
+		? 'Sync conflict — local copy preserved'
+		: synchronized
+		? 'Thought saved to server'
+		: 'Thought saved offline — pending sync';
 	stateTimer = setTimeout(() => {
 		state.classList.remove('saved');
-		stateText.textContent = 'Saved on this device';
+		stateText.textContent = savedStateText();
 	}, 1100);
+}
+
+function savedStateText() {
+	if (syncConflict) return 'Sync conflict — local copy preserved';
+	return serverDurable ? 'Saved to server' : 'Saved offline — pending sync';
+}
+
+function synchronizeNotebook() {
+	const attempt = syncQueue.then(async () => {
+		try {
+			await store.synchronize(remote);
+			syncConflict = false;
+			return true;
+		} catch (error) {
+			syncConflict = error instanceof NotebookConflictError;
+			return false;
+		}
+	});
+	syncQueue = attempt;
+	return attempt;
 }
 
 function showCleaning() {
@@ -470,10 +507,13 @@ async function cleanSubmittedThought(noteId: string, thoughtId: string, rawThoug
 			thoughts: note.thoughts,
 			location: note.location
 		});
+		serverDurable = await synchronizeNotebook();
 		renderNotes();
 		fitEditor();
 		state.classList.add('saved');
-		stateText.textContent = 'Thought cleaned and saved';
+		stateText.textContent = serverDurable
+			? 'Thought cleaned and saved to server'
+			: 'Thought cleaned offline — pending sync';
 	} catch {
 		state.classList.remove('saved');
 		stateText.textContent = 'Cleanup failed — original kept';
@@ -499,20 +539,24 @@ const agentSetup = new AgentSetup({
 if (!notes.length) createNewNote();
 else {
 	editor.value = currentText(notes[0]!);
-	stateText.textContent = 'Saved on this device';
+	stateText.textContent = savedStateText();
 }
 renderFolders();
 
 editor.addEventListener('keydown', (event) => {
 	if (event.key !== 'Enter' || event.shiftKey) return;
-	requestAnimationFrame(async () => {
-		const note = activeNote();
-		if (!note) return;
-		const thoughtId = `thought-${crypto.randomUUID()}`;
-		const submitted = appendThought(note.savedText, note.thoughts, editor.value, thoughtId);
-		drafts.set(note.id, editor.value);
-		note.savedText = editor.value;
-		note.thoughts = submitted.thoughts;
+	event.preventDefault();
+	const note = activeNote();
+	if (!note) return;
+	const submittedText = editor.value.endsWith('\n') ? editor.value : `${editor.value}\n`;
+	editor.value = submittedText;
+	drafts.set(note.id, submittedText);
+	fitEditor();
+	void (async () => {
+			const thoughtId = `thought-${crypto.randomUUID()}`;
+			const submitted = appendThought(note.savedText, note.thoughts, submittedText, thoughtId);
+			note.savedText = submittedText;
+			note.thoughts = submitted.thoughts;
 		await store.commitNote({
 			id: note.id,
 			text: note.savedText,
@@ -521,10 +565,11 @@ editor.addEventListener('keydown', (event) => {
 		});
 		note.persisted = true;
 		renderNotes();
-		showSaved();
-		fitEditor();
-		if (submitted.appended) void cleanSubmittedThought(note.id, thoughtId, submitted.rawThought);
-	});
+		serverDurable = await synchronizeNotebook();
+		showSaved(serverDurable);
+			fitEditor();
+			if (submitted.appended) void cleanSubmittedThought(note.id, thoughtId, submitted.rawThought);
+		})();
 });
 
 editor.addEventListener('input', () => {
@@ -559,4 +604,12 @@ document.addEventListener('keydown', (event) => {
 	if (event.key === 'Escape') closeMoveMenus();
 });
 window.addEventListener('resize', fitEditor);
+window.addEventListener('online', () => {
+	void synchronizeNotebook().then((synchronized) => {
+		serverDurable = synchronized;
+		if (activeNote()?.persisted) stateText.textContent = savedStateText();
+	});
+});
+editor.disabled = false;
+document.documentElement.dataset.notebookReady = 'true';
 fitEditor();

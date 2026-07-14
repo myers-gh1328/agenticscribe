@@ -1,18 +1,21 @@
 import 'fake-indexeddb/auto';
+import Dexie from 'dexie';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
 	FolderHierarchyError,
 	FolderNameError,
+	NotebookConflictError,
 	NotebookStore,
 	noteLabel,
-	type CommittedNote
+	type CommittedNote,
+	type NotebookMutation
 } from './notebook-store';
 
 const stores: NotebookStore[] = [];
 
-function createStore() {
+function createStore(databaseName = `agenticscribe-${crypto.randomUUID()}`) {
 	const store = new NotebookStore({
-		databaseName: `agenticscribe-${crypto.randomUUID()}`,
+		databaseName,
 		now: () => '2026-07-13T12:00:00.000Z'
 	});
 	stores.push(store);
@@ -24,6 +27,252 @@ afterEach(async () => {
 });
 
 describe('NotebookStore', () => {
+	it('hydrates clean folders and notes from the authoritative snapshot', async () => {
+		const store = createStore();
+		await store.synchronize({
+			async snapshot() {
+				return {
+					schemaVersion: 1,
+					folders: [{ id: 'work', name: ' Work ', parentId: null, serverVersion: 4, createdAt: 'created', updatedAt: 'updated' }],
+					notes: [{
+						id: 'note-remote',
+						text: 'Remote thought\n',
+						thoughts: [{ id: 'thought-remote', end: 15 }],
+						location: 'work',
+						serverVersion: 7,
+						createdAt: 'created',
+						updatedAt: 'updated'
+					}]
+				};
+			},
+			async applyMutation() {
+				throw new Error('No mutation expected.');
+			}
+		});
+
+		expect(await store.listFolders()).toEqual([
+			expect.objectContaining({ id: 'work', name: 'Work', parentId: null })
+		]);
+		expect(await store.loadNote('note-remote')).toMatchObject({ text: 'Remote thought\n' });
+		expect(await store.syncState('note', 'note-remote')).toMatchObject({
+			serverVersion: 7,
+			status: 'clean'
+		});
+	});
+
+	it('migrates version-one browser data by sending folders before their notes', async () => {
+		const databaseName = `agenticscribe-legacy-${crypto.randomUUID()}`;
+		const legacy = new Dexie(databaseName);
+		legacy.version(1).stores({
+			notes: '&id, location, updatedAt',
+			folders: '&id, parentId, &[parentKey+normalizedName]'
+		});
+		await legacy.table('notes').add({
+			id: 'legacy-note', text: 'Legacy thought\n', thoughts: [{ id: 'legacy-thought', end: 15 }],
+			location: 'legacy-folder', revision: 1, createdAt: 'created', updatedAt: 'updated'
+		});
+		await legacy.table('folders').add({
+			id: 'legacy-folder', name: 'Legacy', normalizedName: 'legacy', parentId: null,
+			parentKey: '\u0000root', createdAt: 'created', updatedAt: 'updated'
+		});
+		legacy.close();
+
+		const store = createStore(databaseName);
+		const applied: NotebookMutation[] = [];
+		await store.synchronize({
+			async snapshot() {
+				return { schemaVersion: 1, notes: [], folders: [] };
+			},
+			async applyMutation(mutation) {
+				applied.push(mutation);
+				return { status: 'applied', entityVersion: 1 };
+			}
+		});
+
+		expect(applied.map((mutation) => mutation.type)).toEqual(['put-folder', 'put-note']);
+		expect(await store.pendingMutations()).toEqual([]);
+	});
+
+	it('rebases a newer local commit when an older in-flight mutation is acknowledged', async () => {
+		const store = createStore();
+		const first = {
+			id: 'note-race', text: 'First\n', thoughts: [{ id: 'thought-1', end: 6 }], location: 'scratchpad'
+		};
+		await store.commitNote(first);
+		await store.synchronize({
+			async snapshot() { return { schemaVersion: 1, notes: [], folders: [] }; },
+			async applyMutation() { return { status: 'applied', entityVersion: 1 }; }
+		});
+		await store.commitNote({ ...first, text: 'Second\n', thoughts: [{ id: 'thought-2', end: 7 }] });
+
+		let release!: () => void;
+		const paused = new Promise<void>((resolve) => { release = resolve; });
+		let started!: () => void;
+		const mutationStarted = new Promise<void>((resolve) => { started = resolve; });
+		const synchronizing = store.synchronize({
+			async snapshot() { return { schemaVersion: 1, notes: [], folders: [] }; },
+			async applyMutation() {
+				started();
+				await paused;
+				return { status: 'applied', entityVersion: 2 };
+			}
+		});
+		await mutationStarted;
+		await store.commitNote({ ...first, text: 'Third\n', thoughts: [{ id: 'thought-3', end: 6 }] });
+		release();
+		await synchronizing;
+
+		expect(await store.pendingMutations()).toEqual([
+			expect.objectContaining({
+				type: 'put-note',
+				expectedVersion: 2,
+				note: expect.objectContaining({ text: 'Third\n' })
+			})
+		]);
+		expect(await store.syncState('note', 'note-race')).toMatchObject({
+			serverVersion: 2,
+			status: 'pending'
+		});
+	});
+	it('atomically queues and coalesces offline note commits until the server acknowledges them', async () => {
+		const store = createStore();
+		await store.commitNote({
+			id: 'note-1',
+			text: 'First offline thought\n',
+			thoughts: [{ id: 'thought-1', end: 22 }],
+			location: 'scratchpad'
+		});
+		await store.commitNote({
+			id: 'note-1',
+			text: 'First offline thought\nSecond offline thought\n',
+			thoughts: [
+				{ id: 'thought-1', end: 22 },
+				{ id: 'thought-2', end: 45 }
+			],
+			location: 'scratchpad'
+		});
+
+		const pending = await store.pendingMutations();
+		expect(pending).toHaveLength(1);
+		expect(pending[0]).toMatchObject({
+			type: 'put-note',
+			entityId: 'note-1',
+			expectedVersion: 0,
+			note: { text: 'First offline thought\nSecond offline thought\n' }
+		});
+
+		const applied: NotebookMutation[] = [];
+		await store.synchronize({
+			async snapshot() {
+				return { schemaVersion: 1, notes: [], folders: [] };
+			},
+			async applyMutation(mutation) {
+				applied.push(mutation);
+				return { status: 'applied', entityVersion: 1 };
+			}
+		});
+
+		expect(applied).toHaveLength(1);
+		expect(await store.pendingMutations()).toEqual([]);
+		expect(await store.syncState('note', 'note-1')).toEqual({
+			entityType: 'note',
+			entityId: 'note-1',
+			serverVersion: 1,
+			status: 'clean'
+		});
+	});
+
+	it('keeps offline work queued when synchronization is unavailable', async () => {
+		const store = createStore();
+		await store.commitNote({
+			id: 'note-offline',
+			text: 'Keep offline\n',
+			thoughts: [{ id: 'thought-offline', end: 13 }],
+			location: 'scratchpad'
+		});
+
+		await expect(
+			store.synchronize({
+				async snapshot() {
+					throw new TypeError('offline');
+				},
+				async applyMutation() {
+					throw new TypeError('offline');
+				}
+			})
+		).rejects.toThrow('offline');
+
+		expect(await store.loadNote('note-offline')).toMatchObject({ text: 'Keep offline\n' });
+		expect(await store.pendingMutations()).toHaveLength(1);
+	});
+
+	it('preserves a local edit in an explicit conflict record when the server is newer', async () => {
+		const store = createStore();
+		const original = {
+			id: 'note-conflict', text: 'Original\n', thoughts: [{ id: 'thought-original', end: 9 }], location: 'scratchpad'
+		};
+		await store.commitNote(original);
+		await store.synchronize({
+			async snapshot() { return { schemaVersion: 1, notes: [], folders: [] }; },
+			async applyMutation() { return { status: 'applied', entityVersion: 1 }; }
+		});
+		await store.commitNote({
+			...original,
+			text: 'Local edit\n',
+			thoughts: [{ id: 'thought-local', end: 11 }]
+		});
+		const conflict = Object.assign(new Error('conflict'), {
+			status: 409,
+			current: { serverVersion: 2, deleted: false }
+		});
+
+		await expect(store.synchronize({
+			async snapshot() { return { schemaVersion: 1, notes: [], folders: [] }; },
+			async applyMutation() { throw conflict; }
+		})).rejects.toBeInstanceOf(NotebookConflictError);
+
+		expect(await store.pendingMutations()).toEqual([]);
+		expect(await store.syncState('note', 'note-conflict')).toMatchObject({ status: 'conflict' });
+		expect(await store.inspectConflict('note', 'note-conflict')).toMatchObject({
+			mutation: expect.objectContaining({ type: 'put-note' }),
+			remote: { serverVersion: 2, deleted: false }
+		});
+		expect(await store.loadNote('note-conflict')).toMatchObject({ text: 'Local edit\n' });
+	});
+
+	it('keeps deleted content in a local tombstone until the server acknowledges deletion', async () => {
+		const store = createStore();
+		await store.commitNote({
+			id: 'note-delete',
+			text: 'Delete after sync\n',
+			thoughts: [{ id: 'thought-delete', end: 18 }],
+			location: 'scratchpad'
+		});
+		await store.synchronize({
+			async snapshot() {
+				return { schemaVersion: 1, notes: [], folders: [] };
+			},
+			async applyMutation() {
+				return { status: 'applied', entityVersion: 1 };
+			}
+		});
+
+		await store.deleteNote('note-delete');
+
+		expect(await store.loadNote('note-delete')).toBeUndefined();
+		expect(await store.pendingMutations()).toEqual([
+			expect.objectContaining({
+				type: 'delete-note',
+				entityId: 'note-delete',
+				expectedVersion: 1
+			})
+		]);
+		expect(await store.inspectTombstone('note', 'note-delete')).toMatchObject({
+			entityId: 'note-delete',
+			previous: { text: 'Delete after sync\n' }
+		});
+	});
+
 	it('persists only explicitly committed note content', async () => {
 		const store = createStore();
 		const committed: CommittedNote = {

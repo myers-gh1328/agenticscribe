@@ -1,7 +1,7 @@
 import { cp, mkdir, readlink, rename, rm, symlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
-export async function publishRelease({ distRoot, releaseRoot, releaseId }) {
+export async function publishRelease({ projectRoot, distRoot, releaseRoot, releaseId }) {
 	const root = resolve(releaseRoot);
 	const releasesDir = join(root, 'releases');
 	const releaseDir = join(releasesDir, releaseId);
@@ -11,6 +11,9 @@ export async function publishRelease({ distRoot, releaseRoot, releaseId }) {
 	await mkdir(releasesDir, { recursive: true });
 	await mkdir(releaseDir, { recursive: false });
 	await cp(resolve(distRoot), join(releaseDir, 'dist'), { recursive: true });
+	await cp(join(resolve(projectRoot), 'scripts'), join(releaseDir, 'scripts'), { recursive: true });
+	await cp(join(resolve(projectRoot), 'package.json'), join(releaseDir, 'package.json'));
+	await cp(join(resolve(projectRoot), 'package-lock.json'), join(releaseDir, 'package-lock.json'));
 	await rm(nextLink, { recursive: true, force: true });
 	await symlink(releaseDir, nextLink, process.platform === 'win32' ? 'junction' : 'dir');
 	if (process.platform === 'win32') await rm(currentLink, { recursive: true, force: true });
