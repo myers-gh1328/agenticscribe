@@ -176,7 +176,13 @@ async function handleAgentRequest({
 			return;
 		}
 		const probe = await probeAgent({ agent, agentFetch, timeoutMs: agentConnectTimeoutMs, maxAgentResponseBytes });
-		if (!probe.available) agentEvent({ event: 'agent_status_probe_failed', outcome: probe.outcome });
+		if (!probe.available) {
+			agentEvent({
+				event: 'agent_status_probe_failed',
+				outcome: probe.outcome,
+				...(probe.code ? { code: probe.code } : {})
+			});
+		}
 		respondJson(response, 200, { configured: true, available: probe.available, model: agent.model }, request.method);
 		return;
 	}
@@ -255,7 +261,11 @@ async function probeAgent({ agent, agentFetch, timeoutMs, maxAgentResponseBytes 
 			signal: AbortSignal.timeout(timeoutMs)
 		});
 	} catch (error) {
-		return { available: false, outcome: error?.name === 'TimeoutError' ? 'timeout' : 'network_error' };
+		return {
+			available: false,
+			outcome: error?.name === 'TimeoutError' ? 'timeout' : 'network_error',
+			code: safeNetworkCode(error)
+		};
 	}
 	if (!response.ok) return { available: false, outcome: 'upstream_status' };
 	try {
@@ -265,6 +275,20 @@ async function probeAgent({ agent, agentFetch, timeoutMs, maxAgentResponseBytes 
 	} catch {
 		return { available: false, outcome: 'invalid_response' };
 	}
+}
+
+function safeNetworkCode(error) {
+	const code = error?.cause?.code;
+	return [
+		'EACCES',
+		'ECONNREFUSED',
+		'ECONNRESET',
+		'EHOSTUNREACH',
+		'ENETUNREACH',
+		'EPERM',
+		'ETIMEDOUT',
+		'UND_ERR_CONNECT_TIMEOUT'
+	].includes(code) ? code : undefined;
 }
 
 async function requestCleanup({ agent, agentFetch, thought, timeoutMs, maxAgentResponseBytes }) {
