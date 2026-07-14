@@ -19,10 +19,10 @@ cache and mutation outbox.
 - When enabled, Enter saves the raw thought first and then sends only that thought for spelling and grammar cleanup.
 - Failed cleanup leaves the original thought unchanged and does not retry automatically.
 
-Deployments may enforce identity and application capability headers or run on
-a trusted private LAN with capability enforcement disabled. The app does not
-implement public access, collaboration, voice, summaries, finalization, or
-sharing.
+Deployments may enforce single-tenant Microsoft Entra authentication, enforce
+identity and application capability headers, or run on a trusted private LAN.
+The app is owner-only and does not implement collaboration, voice, summaries,
+finalization, or sharing.
 
 ## Requirements
 
@@ -86,6 +86,14 @@ origin, a protected data directory, deployment-owned
 separately managed encrypted backup. Tailscale deployments additionally set an
 application capability; trusted LAN deployments leave it unset. See
 [`docs/architecture/durable-notes.md`](docs/architecture/durable-notes.md).
+
+For an internet-routed owner deployment, set
+`AGENTIC_SCRIBE_AUTH_ENABLED=true`, `AGENTIC_SCRIBE_CANONICAL_ORIGIN`, the
+`AGENTIC_SCRIBE_ENTRA_*` values, and
+`AGENTIC_SCRIBE_SESSION_SECRET_FILE`. Client and session secrets may be supplied
+with their corresponding `_FILE` variables. Health and readiness stay public;
+browser navigation redirects to sign-in and unauthenticated API calls return a
+JSON `401` response.
 
 Create an integrity-checked SQLite snapshot while the service is running:
 

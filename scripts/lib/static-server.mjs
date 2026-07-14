@@ -6,6 +6,7 @@ import {
 	MutationValidationError,
 	openNotebookDatabase
 } from './notebook-database.mjs';
+import { createAuthRequest, writeAuthResponse } from './http-auth.mjs';
 
 const contentTypes = new Map([
 	['.css', 'text/css; charset=utf-8'],
@@ -24,6 +25,7 @@ export async function startStaticServer({
 	syncEnabled = false,
 	canonicalOrigin,
 	requiredCapability,
+	authentication,
 	maxBodyBytes = 1024 * 1024,
 	agentBaseUrl,
 	agentModel,
@@ -41,6 +43,14 @@ export async function startStaticServer({
 	let activeAgentRequests = 0;
 	const server = createServer(async (request, response) => {
 		try {
+			const authRequest = authentication ? createAuthRequest(request, canonicalOrigin) : undefined;
+			if (authentication) {
+				const authResponse = await authentication.handle(authRequest);
+				if (authResponse) {
+					await writeAuthResponse(authResponse, response);
+					return;
+			}
+			}
 			if (request.url === '/healthz') {
 				respond(response, 200, 'application/json; charset=utf-8', JSON.stringify({ ok: true, service: 'agenticscribe' }), request.method);
 				return;
@@ -53,8 +63,17 @@ export async function startStaticServer({
 					service: 'agenticscribe',
 					schemaVersion: health?.schemaVersion,
 					syncEnabled,
-					agentConfigured: Boolean(agent)
+					agentConfigured: Boolean(agent),
+					authEnabled: Boolean(authentication)
 				}, request.method);
+				return;
+			}
+			if (authentication && !authentication.session(authRequest).authenticated) {
+				if (request.url?.startsWith('/api/')) {
+					respondJson(response, 401, { error: 'authentication_required' }, request.method);
+				} else {
+					await writeAuthResponse(authentication.protect(authRequest), response);
+				}
 				return;
 			}
 			if (request.url?.startsWith('/api/agent/')) {
@@ -62,7 +81,7 @@ export async function startStaticServer({
 					request,
 					response,
 					agent,
-					requiredCapability,
+					requiredCapability: authentication ? undefined : requiredCapability,
 					canonicalOrigin,
 					agentFetch,
 					agentEvent,
@@ -88,7 +107,7 @@ export async function startStaticServer({
 					database,
 					syncEnabled,
 					canonicalOrigin,
-					requiredCapability,
+					requiredCapability: authentication ? undefined : requiredCapability,
 					maxBodyBytes
 				});
 				return;

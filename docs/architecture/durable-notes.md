@@ -20,10 +20,12 @@ outbox; it is not the authoritative or only copy.
 ## Ownership And Data Flow
 
 The Node server owns a SQLite database at a deployment-configured path. It can
-listen on a trusted private LAN or on loopback behind Tailscale Serve. A
+listen on a trusted private LAN, behind Tailscale Serve, or behind a public
+route protected by single-tenant Entra authentication. A
 Tailscale deployment supplies verified identity and an explicitly granted
-AgenticScribe app capability. A LAN deployment leaves capability enforcement
-unset and stores records under one deployment-local owner.
+AgenticScribe app capability. LAN and Entra deployments store records under one
+stable deployment-local owner. Entra object IDs authorize access but do not
+become database ownership keys.
 
 The server exposes a same-origin `/api/notebook` contract. The browser store
 applies a mutation locally and records/coalesces its IndexedDB outbox entry in
