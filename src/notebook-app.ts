@@ -6,6 +6,7 @@ import {
 	type StoredFolder,
 	type ThoughtBoundary
 } from './notebook-store';
+import { initializeNotebookIdentity, notebookDatabaseName } from './auth-bootstrap';
 import { HttpNotebookRemote } from './notebook-remote';
 import { appendThought, applyThoughtCleanup } from './thoughts';
 import {
@@ -45,7 +46,8 @@ const cancelDelete = requireElement<HTMLButtonElement>('#cancel-delete');
 const confirmDelete = requireElement<HTMLButtonElement>('#confirm-delete');
 const workspace = requireElement<HTMLElement>('.workspace');
 const setupPage = requireElement<HTMLElement>('#setup-page');
-const store = new NotebookStore({ databaseName: 'agenticscribe' });
+await initializeNotebookIdentity();
+const store = new NotebookStore({ databaseName: notebookDatabaseName() });
 const localMarkdownStore = new LocalMarkdownStore();
 const remote = new HttpNotebookRemote();
 let syncQueue = Promise.resolve(false);

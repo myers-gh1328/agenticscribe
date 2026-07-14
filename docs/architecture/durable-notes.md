@@ -23,9 +23,14 @@ The Node server owns a SQLite database at a deployment-configured path. It can
 listen on a trusted private LAN, behind Tailscale Serve, or behind a public
 route protected by single-tenant Entra authentication. A
 Tailscale deployment supplies verified identity and an explicitly granted
-AgenticScribe app capability. LAN and Entra deployments store records under one
-stable deployment-local owner. Entra object IDs authorize access but do not
-become database ownership keys.
+AgenticScribe app capability. LAN deployments store records under one stable
+deployment-local owner. Entra deployments key records by the verified object ID
+so each allowed user receives an isolated notebook.
+
+Before opening IndexedDB or starting synchronization, the browser resolves the
+authenticated session and selects an object-ID-specific notebook database. This
+partitions the offline cache, drafts, and mutation outbox across account
+switches as well as partitioning authoritative SQLite rows.
 
 The server exposes a same-origin `/api/notebook` contract. The browser store
 applies a mutation locally and records/coalesces its IndexedDB outbox entry in
