@@ -21,8 +21,8 @@ cache and mutation outbox.
 
 Deployments may enforce single-tenant Microsoft Entra authentication, enforce
 identity and application capability headers, or run on a trusted private LAN.
-The app is owner-only and does not implement collaboration, voice, summaries,
-finalization, or sharing.
+Each authenticated owner receives an isolated notebook. The app does not
+implement collaboration, voice, summaries, finalization, or sharing.
 
 ## Requirements
 

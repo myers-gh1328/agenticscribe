@@ -3,9 +3,11 @@
 AgenticScribe stores authoritative notes in server-side SQLite and uses
 IndexedDB as an offline cache/outbox. The production server must be protected
 by single-tenant Microsoft Entra or a private Tailscale/LAN boundary. Entra
-authorization allowlists the owner's object ID while durable rows remain keyed
-to the stable deployment-local `local-owner` identity; changing identity
-providers must not silently re-key existing notes.
+authorization allowlists Entra object IDs, and durable rows are keyed by the
+verified object ID. Authorized users cannot read or mutate another user's
+notebook through the API.
+The browser also uses an object-ID-specific IndexedDB database so cached notes,
+drafts, and pending offline mutations are not reused by another signed-in user.
 
 Notes are not end-to-end encrypted. Anyone with access to the browser profile,
 host account, live database, or decrypted backup may be able to read them. Do

@@ -49,7 +49,7 @@ export async function startStaticServer({
 				if (authResponse) {
 					await writeAuthResponse(authResponse, response);
 					return;
-			}
+				}
 			}
 			if (request.url === '/healthz') {
 				respond(response, 200, 'application/json; charset=utf-8', JSON.stringify({ ok: true, service: 'agenticscribe' }), request.method);
@@ -68,7 +68,8 @@ export async function startStaticServer({
 				}, request.method);
 				return;
 			}
-			if (authentication && !authentication.session(authRequest).authenticated) {
+			const authenticatedSession = authentication?.session(authRequest);
+			if (authentication && (!authenticatedSession.authenticated || !authenticatedSession.user?.oid)) {
 				if (request.url?.startsWith('/api/')) {
 					respondJson(response, 401, { error: 'authentication_required' }, request.method);
 				} else {
@@ -108,6 +109,7 @@ export async function startStaticServer({
 					syncEnabled,
 					canonicalOrigin,
 					requiredCapability: authentication ? undefined : requiredCapability,
+					ownerId: authenticatedSession?.user?.oid?.toLowerCase(),
 					maxBodyBytes
 				});
 				return;
@@ -377,13 +379,16 @@ async function handleNotebookRequest({
 	syncEnabled,
 	canonicalOrigin,
 	requiredCapability,
+	ownerId,
 	maxBodyBytes
 }) {
 	if (!database || !canonicalOrigin) {
 		respondJson(response, 503, { error: 'notebook_unavailable' }, request.method);
 		return;
 	}
-	const authorization = requiredCapability
+	const authorization = ownerId
+		? { ok: true, ownerId }
+		: requiredCapability
 		? authorizeTailscaleRequest(request, requiredCapability)
 		: { ok: true, ownerId: 'local-owner' };
 	if (!authorization.ok) {

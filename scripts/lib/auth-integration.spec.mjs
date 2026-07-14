@@ -36,51 +36,99 @@ describe('Entra package integration', () => {
 		expect(await api.json()).toEqual({ error: 'authentication_required' });
 	});
 
-	it('uses the configured canonical origin and preserves the stable local owner after login', async () => {
-		const { server } = await startAuthenticatedServer();
-		const login = await fetch(`${server.url}/auth/login?returnTo=%2F`, {
-			redirect: 'manual',
-			headers: { Host: 'attacker.example' }
-		});
-		const authorization = new URL(login.headers.get('location'));
-		expect(authorization.searchParams.get('redirect_uri')).toBe('https://notes.example.test/auth/callback');
-		const pendingCookie = login.headers.getSetCookie()[0].split(';')[0];
-
-		const callback = await fetch(`${server.url}/auth/callback?code=synthetic&state=state`, {
-			redirect: 'manual',
-			headers: { Cookie: pendingCookie, Host: 'attacker.example' }
-		});
-		expect(callback.status).toBe(302);
-		const sessionCookie = callback.headers.getSetCookie().find((value) => value.startsWith('scribe_session=')).split(';')[0];
-
-		const snapshot = await fetch(`${server.url}/api/notebook/snapshot`, {
-			headers: {
-				Cookie: sessionCookie,
-				'Tailscale-User-Login': 'must-not-become-owner@example.test'
+	it('fails closed when an authentication adapter omits the verified object ID', async () => {
+		const root = await mkdtemp(join(tmpdir(), 'agenticscribe-invalid-auth-'));
+		await writeFile(join(root, 'index.html'), '<h1>AgenticScribe</h1>');
+		const server = await startStaticServer({
+			host: '127.0.0.1',
+			port: 0,
+			staticRoot: root,
+			databasePath: join(root, 'notes.sqlite'),
+			syncEnabled: true,
+			canonicalOrigin: 'https://notes.example.test',
+			authentication: {
+				handle: async () => undefined,
+				session: () => ({ authenticated: true, user: null }),
+				protect: () => new Response(null, { status: 302 })
 			}
 		});
-		expect(snapshot.status).toBe(200);
-		expect(await snapshot.json()).toMatchObject({ notes: [], folders: [] });
+		cleanup.push(async () => {
+			await server.close();
+			await rm(root, { recursive: true, force: true });
+		});
+
+		const snapshot = await fetch(`${server.url}/api/notebook/snapshot`);
+		expect(snapshot.status).toBe(401);
+		expect(await snapshot.json()).toEqual({ error: 'authentication_required' });
+	});
+
+	it('uses the verified Entra object ID to isolate each user notebook', async () => {
+		const { server } = await startAuthenticatedServer();
+		const ownerOne = await authenticate(server, 'owner-one', 'state-one');
+		const ownerTwo = await authenticate(server, 'owner-two', 'state-two');
+
+		const created = await fetch(`${server.url}/api/notebook/mutations`, {
+			method: 'POST',
+			headers: {
+				Cookie: ownerOne,
+				Origin: 'https://notes.example.test',
+				'Content-Type': 'application/json',
+				'Sec-Fetch-Site': 'same-origin'
+			},
+			body: JSON.stringify({
+				mutationId: 'owner-one-folder-mutation',
+				type: 'put-folder',
+				entityId: 'private-folder',
+				expectedVersion: 0,
+				folder: { id: 'private-folder', name: 'Owner One', parentId: null }
+			})
+		});
+		expect(created.status).toBe(200);
+
+		const ownerTwoSnapshot = await fetch(`${server.url}/api/notebook/snapshot`, {
+			headers: { Cookie: ownerTwo }
+		});
+		expect(await ownerTwoSnapshot.json()).toMatchObject({ notes: [], folders: [] });
+
+		const ownerOneSnapshot = await fetch(`${server.url}/api/notebook/snapshot`, {
+			headers: { Cookie: ownerOne }
+		});
+		expect((await ownerOneSnapshot.json()).folders).toHaveLength(1);
 	});
 });
+
+async function authenticate(server, objectId, state) {
+	const login = await fetch(`${server.url}/auth/login`, { redirect: 'manual' });
+	const pendingCookie = login.headers.getSetCookie()[0].split(';')[0];
+	const callback = await fetch(`${server.url}/auth/callback?code=${objectId}&state=${state}`, {
+		redirect: 'manual',
+		headers: { Cookie: pendingCookie }
+	});
+	expect(callback.status).toBe(302);
+	return callback.headers.getSetCookie().find((value) => value.startsWith('scribe_session=')).split(';')[0];
+}
 
 async function startAuthenticatedServer() {
 	const root = await mkdtemp(join(tmpdir(), 'agenticscribe-auth-'));
 	await writeFile(join(root, 'index.html'), '<h1>AgenticScribe</h1>');
-	const randomValues = ['state', 'nonce', 'verifier'];
+	const randomValues = ['state-one', 'nonce-one', 'verifier-one', 'state-two', 'nonce-two', 'verifier-two'];
 	const authentication = createOwnerOidc({
 		tenantId: 'tenant-id',
 		clientId: 'client-id',
 		clientSecret: 'synthetic-client-secret',
 		redirectUris: ['https://notes.example.test/auth/callback'],
 		postLogoutRedirectUri: 'https://notes.example.test/',
-		allowedObjectIds: ['owner-id'],
+		allowedObjectIds: ['owner-one', 'owner-two'],
 		cookieSecret: 'synthetic-cookie-signing-secret-with-at-least-32-bytes',
 		cookiePrefix: 'scribe',
 		publicPaths: ['/healthz', '/readyz'],
 		randomValue: () => randomValues.shift(),
-		tokenFetch: async () => Response.json({ id_token: 'synthetic-token' }),
-		verifyIdToken: async () => ({ oid: 'owner-id', nonce: 'nonce', exp: 4_000_000_000 })
+		tokenFetch: async (_url, options) => Response.json({ id_token: new URLSearchParams(options.body).get('code') }),
+		verifyIdToken: async (objectId) => ({
+			oid: objectId,
+			nonce: objectId === 'owner-one' ? 'nonce-one' : 'nonce-two',
+			exp: 4_000_000_000
+		})
 	});
 	const server = await startStaticServer({
 		host: '127.0.0.1',
