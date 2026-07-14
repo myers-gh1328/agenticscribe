@@ -24,10 +24,20 @@ export async function startStaticServer({
 	syncEnabled = false,
 	canonicalOrigin,
 	requiredCapability,
-	maxBodyBytes = 1024 * 1024
+	maxBodyBytes = 1024 * 1024,
+	agentBaseUrl,
+	agentModel,
+	agentFetch = fetch,
+	agentConnectTimeoutMs = 5_000,
+	agentCleanupTimeoutMs = 30_000,
+	maxAgentBodyBytes = 16 * 1024,
+	maxAgentResponseBytes = 64 * 1024,
+	maxConcurrentAgentRequests = 2
 }) {
 	const root = resolve(staticRoot);
 	const database = databasePath ? openNotebookDatabase({ path: databasePath }) : undefined;
+	const agent = normalizeAgentConfig(agentBaseUrl, agentModel);
+	let activeAgentRequests = 0;
 	const server = createServer(async (request, response) => {
 		try {
 			if (request.url === '/healthz') {
@@ -41,8 +51,32 @@ export async function startStaticServer({
 					ok: ready,
 					service: 'agenticscribe',
 					schemaVersion: health?.schemaVersion,
-					syncEnabled
+					syncEnabled,
+					agentConfigured: Boolean(agent)
 				}, request.method);
+				return;
+			}
+			if (request.url?.startsWith('/api/agent/')) {
+				await handleAgentRequest({
+					request,
+					response,
+					agent,
+					requiredCapability,
+					canonicalOrigin,
+					agentFetch,
+					agentConnectTimeoutMs,
+					agentCleanupTimeoutMs,
+					maxAgentBodyBytes,
+					maxAgentResponseBytes,
+					acquireSlot() {
+						if (activeAgentRequests >= maxConcurrentAgentRequests) return false;
+						activeAgentRequests += 1;
+						return true;
+					},
+					releaseSlot() {
+						activeAgentRequests -= 1;
+					}
+				});
 				return;
 			}
 			if (request.url?.startsWith('/api/notebook/')) {
@@ -92,6 +126,196 @@ export async function startStaticServer({
 		})),
 	};
 }
+
+function normalizeAgentConfig(baseUrl, model) {
+	if (!baseUrl || !model?.trim()) return undefined;
+	try {
+		const url = new URL(baseUrl);
+		if (!['http:', 'https:'].includes(url.protocol)) return undefined;
+		return {
+			baseUrl: url.toString().replace(/\/$/, ''),
+			model: model.trim()
+		};
+	} catch {
+		return undefined;
+	}
+}
+
+async function handleAgentRequest({
+	request,
+	response,
+	agent,
+	requiredCapability,
+	canonicalOrigin,
+	agentFetch,
+	agentConnectTimeoutMs,
+	agentCleanupTimeoutMs,
+	maxAgentBodyBytes,
+	maxAgentResponseBytes,
+	acquireSlot,
+	releaseSlot
+}) {
+	const authorization = requiredCapability
+		? authorizeTailscaleRequest(request, requiredCapability, 'owner')
+		: { ok: false, status: 503, error: 'agent_unavailable' };
+	if (!authorization.ok) {
+		respondJson(response, authorization.status, { error: authorization.error }, request.method);
+		return;
+	}
+
+	if (request.url === '/api/agent/status') {
+		if (request.method !== 'GET') {
+			respondJson(response, 405, { error: 'method_not_allowed' }, request.method);
+			return;
+		}
+		if (!agent) {
+			respondJson(response, 503, { error: 'agent_unavailable' }, request.method);
+			return;
+		}
+		const available = await probeAgent({ agent, agentFetch, timeoutMs: agentConnectTimeoutMs, maxAgentResponseBytes });
+		respondJson(response, 200, { configured: true, available, model: agent.model }, request.method);
+		return;
+	}
+
+	if (request.url !== '/api/agent/cleanup' || request.method !== 'POST') {
+		respondJson(response, 405, { error: 'method_not_allowed' }, request.method);
+		return;
+	}
+	if (!agent) {
+		respondJson(response, 503, { error: 'agent_unavailable' }, request.method);
+		return;
+	}
+	if (request.headers.origin !== canonicalOrigin || request.headers['sec-fetch-site'] !== 'same-origin') {
+		respondJson(response, 403, { error: 'request_origin_rejected' }, request.method);
+		return;
+	}
+	if (!request.headers['content-type']?.toLowerCase().startsWith('application/json')) {
+		respondJson(response, 415, { error: 'json_required' }, request.method);
+		return;
+	}
+
+	let thought;
+	try {
+		const parsed = JSON.parse(await readBoundedBody(request, maxAgentBodyBytes));
+		if (
+			!parsed ||
+			typeof parsed !== 'object' ||
+			Array.isArray(parsed) ||
+			Object.keys(parsed).length !== 1 ||
+			typeof parsed.thought !== 'string' ||
+			!parsed.thought.trim()
+		) {
+			throw new AgentValidationError();
+		}
+		thought = parsed.thought;
+	} catch (error) {
+		if (error instanceof BodyTooLargeError) {
+			respondJson(response, 413, { error: 'request_too_large' }, request.method);
+		} else {
+			respondJson(response, 422, { error: 'thought_invalid' }, request.method);
+		}
+		return;
+	}
+
+	if (!acquireSlot()) {
+		respondJson(response, 503, { error: 'agent_busy' }, request.method);
+		return;
+	}
+	try {
+		const cleanedThought = await requestCleanup({
+			agent,
+			agentFetch,
+			thought,
+			timeoutMs: agentCleanupTimeoutMs,
+			maxAgentResponseBytes
+		});
+		respondJson(response, 200, { cleanedThought }, request.method);
+	} catch (error) {
+		respondJson(
+			response,
+			error instanceof AgentTimeoutError ? 504 : 502,
+			{ error: error instanceof AgentTimeoutError ? 'agent_timeout' : 'agent_failure' },
+			request.method
+		);
+	} finally {
+		releaseSlot();
+	}
+}
+
+async function probeAgent({ agent, agentFetch, timeoutMs, maxAgentResponseBytes }) {
+	try {
+		const response = await agentFetch(`${agent.baseUrl}/models`, {
+			headers: { Accept: 'application/json' },
+			redirect: 'error',
+			signal: AbortSignal.timeout(timeoutMs)
+		});
+		if (!response.ok) return false;
+		const result = await readBoundedResponseJson(response, maxAgentResponseBytes);
+		return result.data?.some((candidate) => candidate?.id === agent.model) === true;
+	} catch {
+		return false;
+	}
+}
+
+async function requestCleanup({ agent, agentFetch, thought, timeoutMs, maxAgentResponseBytes }) {
+	let response;
+	try {
+		response = await agentFetch(`${agent.baseUrl}/chat/completions`, {
+			method: 'POST',
+			headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				model: agent.model,
+				temperature: 0,
+				messages: [
+					{
+						role: 'system',
+						content: 'Correct only spelling, grammar, capitalization, and punctuation in the submitted thought. Preserve its meaning, wording, tone, and line breaks. Do not add, remove, summarize, explain, or reorganize anything. Return only the corrected thought without quotation marks.'
+					},
+					{ role: 'user', content: thought }
+				]
+			}),
+			redirect: 'error',
+			signal: AbortSignal.timeout(timeoutMs)
+		});
+	} catch (error) {
+		if (error?.name === 'TimeoutError') throw new AgentTimeoutError();
+		throw new AgentUpstreamError();
+	}
+	if (!response.ok) throw new AgentUpstreamError();
+	const result = await readBoundedResponseJson(response, maxAgentResponseBytes);
+	const cleaned = result.choices?.[0]?.message?.content?.trim();
+	const outputLimit = Math.max(1024, Buffer.byteLength(thought, 'utf8') * 4);
+	if (!cleaned || Buffer.byteLength(cleaned, 'utf8') > outputLimit) throw new AgentUpstreamError();
+	return cleaned;
+}
+
+async function readBoundedResponseJson(response, maximumBytes) {
+	const declared = Number(response.headers.get('content-length') ?? '0');
+	if (Number.isFinite(declared) && declared > maximumBytes) throw new AgentUpstreamError();
+	if (!response.body) throw new AgentUpstreamError();
+	const reader = response.body.getReader();
+	let size = 0;
+	const chunks = [];
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		size += value.byteLength;
+		if (size > maximumBytes) {
+			await reader.cancel();
+			throw new AgentUpstreamError();
+		}
+		chunks.push(value);
+	}
+	try {
+		return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+	} catch {
+		throw new AgentUpstreamError();
+	}
+}
+
+class AgentValidationError extends Error {}
+class AgentUpstreamError extends Error {}
+class AgentTimeoutError extends Error {}
 
 async function handleNotebookRequest({
 	request,
@@ -150,14 +374,19 @@ async function handleNotebookRequest({
 	}
 }
 
-function authorizeTailscaleRequest(request, requiredCapability) {
+function authorizeTailscaleRequest(request, requiredCapability, requiredRole) {
 	const ownerId = request.headers['tailscale-user-login'];
 	if (typeof ownerId !== 'string' || ownerId.length === 0) {
 		return { ok: false, status: 401, error: 'identity_required' };
 	}
 	try {
 		const capabilities = JSON.parse(request.headers['tailscale-app-capabilities'] ?? '{}');
-		if (!Array.isArray(capabilities[requiredCapability]) || capabilities[requiredCapability].length === 0) {
+		const grants = capabilities[requiredCapability];
+		if (
+			!Array.isArray(grants) ||
+			grants.length === 0 ||
+			(requiredRole && !grants.some((grant) => grant?.role === requiredRole))
+		) {
 			return { ok: false, status: 403, error: 'capability_required' };
 		}
 		return { ok: true, ownerId };
@@ -197,5 +426,6 @@ function respond(response, status, contentType, body, method) {
 }
 
 function respondJson(response, status, value, method) {
+	response.setHeader('Cache-Control', 'no-store');
 	respond(response, status, 'application/json; charset=utf-8', JSON.stringify(value), method);
 }

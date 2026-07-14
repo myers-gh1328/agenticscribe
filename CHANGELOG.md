@@ -8,7 +8,9 @@
   idempotent retries, explicit conflicts, and deletion tombstones.
 - Added cross-profile and offline-to-online recovery tests.
 - Added integrity-checked online SQLite snapshots and full-runtime releases.
-- Added local OpenAI-compatible agent setup stored in the browser.
+- Added deployment-managed OpenAI-compatible agent setup behind the
+  authenticated same-origin server API; only the cleanup preference remains in
+  the browser.
 - Added automatic per-thought spelling and grammar cleanup after Enter.
 - Preserved each original submitted thought and kept failed cleanup non-destructive.
 - Split the original monolithic page into focused HTML, style, controller, setup, persistence, agent, and thought modules.

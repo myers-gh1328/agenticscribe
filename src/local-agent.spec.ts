@@ -1,63 +1,67 @@
 import { describe, expect, it, vi } from 'vitest';
-import { LocalAgent, loadAgentSettings, saveAgentSettings, type AgentSettings } from './local-agent';
+import { LocalAgent, loadAgentPreferences, saveAgentPreferences } from './local-agent';
 
-const settings: AgentSettings = {
-	baseUrl: 'http://192.168.4.43:8080/v1',
-	model: 'mlx-community/gemma-4-e4b-it-8bit',
-	automaticCleanup: true
-};
-
-function memoryStorage() {
-	const values = new Map<string, string>();
+function memoryStorage(initial: Record<string, string> = {}) {
+	const values = new Map(Object.entries(initial));
 	return {
 		getItem: (key: string) => values.get(key) ?? null,
-		setItem: (key: string, value: string) => values.set(key, value)
+		setItem: (key: string, value: string) => values.set(key, value),
+		removeItem: (key: string) => values.delete(key)
 	};
 }
 
-describe('local agent settings', () => {
-	it('saves validated connection settings in browser storage', () => {
+describe('local agent preferences', () => {
+	it('stores only the automatic-cleanup preference in the browser', () => {
 		const storage = memoryStorage();
 
-		saveAgentSettings({ ...settings, baseUrl: `${settings.baseUrl}/` }, storage);
+		saveAgentPreferences({ automaticCleanup: false }, storage);
 
-		expect(loadAgentSettings(storage)).toEqual(settings);
+		expect(loadAgentPreferences(storage)).toEqual({ automaticCleanup: false });
+		expect(storage.getItem('agenticscribe.agent-preferences')).toBe(
+			JSON.stringify({ automaticCleanup: false })
+		);
+	});
+
+	it('migrates only the preference from legacy browser-owned connection settings', () => {
+		const storage = memoryStorage({
+			'agenticscribe.local-agent': JSON.stringify({
+				baseUrl: 'http://stale-private-host.invalid/v1',
+				model: 'stale-model',
+				automaticCleanup: false
+			})
+		});
+
+		expect(loadAgentPreferences(storage)).toEqual({ automaticCleanup: false });
+		expect(storage.getItem('agenticscribe.local-agent')).toBeNull();
 	});
 });
 
 describe('LocalAgent', () => {
-	it('connects only when the configured model is available', async () => {
+	it('checks deployment-managed status through the same-origin app API', async () => {
 		const request = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(JSON.stringify({ data: [{ id: settings.model }] }), {
-				status: 200,
-				headers: { 'content-type': 'application/json' }
-			})
+			Response.json({ configured: true, available: true, model: 'deployed-model' })
 		);
 
-		await expect(new LocalAgent(settings, request).connect()).resolves.toBeUndefined();
-		expect(request).toHaveBeenCalledWith(`${settings.baseUrl}/models`, {
+		await expect(new LocalAgent(request).connect()).resolves.toEqual({ model: 'deployed-model' });
+		expect(request).toHaveBeenCalledWith('/api/agent/status', {
 			headers: { Accept: 'application/json' },
 			signal: expect.any(AbortSignal)
 		});
 	});
 
-	it('sends only the submitted thought for strict grammar cleanup', async () => {
+	it('sends only the submitted thought to the same-origin cleanup API', async () => {
 		const request = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(
-				JSON.stringify({ choices: [{ message: { content: 'This thought has poor grammar.' } }] }),
-				{ status: 200, headers: { 'content-type': 'application/json' } }
-			)
+			Response.json({ cleanedThought: 'This thought has poor grammar.' })
 		);
 
-		await expect(new LocalAgent(settings, request).cleanThought('this thought have bad grammer.')).resolves.toBe(
+		await expect(new LocalAgent(request).cleanThought('this thought have bad grammer.')).resolves.toBe(
 			'This thought has poor grammar.'
 		);
-		const [, options] = request.mock.calls[0]!;
-		const body = JSON.parse(String(options?.body));
-		expect(body).toMatchObject({ model: settings.model, temperature: 0 });
-		expect(body.messages).toEqual([
-			expect.objectContaining({ role: 'system' }),
-			{ role: 'user', content: 'this thought have bad grammer.' }
-		]);
+		expect(request).toHaveBeenCalledWith('/api/agent/cleanup', {
+			method: 'POST',
+			headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+			body: JSON.stringify({ thought: 'this thought have bad grammer.' }),
+			signal: expect.any(AbortSignal)
+		});
 	});
 });

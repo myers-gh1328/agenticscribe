@@ -1,5 +1,5 @@
 import { requireElement } from './dom';
-import { LocalAgent, loadAgentSettings, saveAgentSettings } from './local-agent';
+import { LocalAgent, loadAgentPreferences, saveAgentPreferences } from './local-agent';
 import './agent-setup.css';
 
 interface AgentSetupOptions {
@@ -10,24 +10,17 @@ interface AgentSetupOptions {
 export class AgentSetup {
 	readonly #form = requireElement<HTMLFormElement>('#agent-setup-form');
 	readonly #status = requireElement<HTMLElement>('#agent-status');
-	readonly #baseUrl = requireElement<HTMLInputElement>('[name="baseUrl"]', this.#form);
-	readonly #model = requireElement<HTMLSelectElement>('[name="model"]', this.#form);
+	readonly #model = requireElement<HTMLElement>('#agent-model', this.#form);
 	readonly #automaticCleanup = requireElement<HTMLInputElement>(
 		'[name="automaticCleanup"]',
 		this.#form
 	);
 	readonly #connectButton = requireElement<HTMLButtonElement>('.connect-agent', this.#form);
-	#agent: LocalAgent | undefined;
+	readonly #agent = new LocalAgent();
+	#connected = false;
 
 	constructor(options: AgentSetupOptions) {
-		const saved = loadAgentSettings();
-		if (saved) {
-			this.#baseUrl.value = saved.baseUrl;
-			this.#model.value = saved.model;
-			this.#automaticCleanup.checked = saved.automaticCleanup;
-			this.#agent = new LocalAgent(saved);
-			this.#status.textContent = 'Configured';
-		}
+		this.#automaticCleanup.checked = loadAgentPreferences().automaticCleanup;
 
 		const closeButton = requireElement<HTMLButtonElement>('#close-agent-setup');
 		requireElement<HTMLButtonElement>('#open-agent-setup').addEventListener('click', () => {
@@ -36,10 +29,14 @@ export class AgentSetup {
 		});
 		closeButton.addEventListener('click', options.onClose);
 		this.#form.addEventListener('submit', (event) => void this.#connect(event));
+		this.#automaticCleanup.addEventListener('change', () => {
+			saveAgentPreferences({ automaticCleanup: this.#automaticCleanup.checked });
+		});
+		void this.#refreshConnection(false);
 	}
 
 	get agent() {
-		return this.#agent;
+		return this.#connected ? this.#agent : undefined;
 	}
 
 	get automaticCleanupEnabled() {
@@ -50,23 +47,18 @@ export class AgentSetup {
 		event.preventDefault();
 		this.#connectButton.disabled = true;
 		this.#setStatus('Connecting…');
-		const settings = {
-			baseUrl: this.#baseUrl.value,
-			model: this.#model.value,
-			automaticCleanup: this.#automaticCleanup.checked
-		};
+		await this.#refreshConnection(true);
+		this.#connectButton.disabled = false;
+	}
 
+	async #refreshConnection(showFailure: boolean) {
 		try {
-			const candidate = new LocalAgent(settings);
-			await candidate.connect();
-			saveAgentSettings(settings);
-			this.#agent = candidate;
+			const status = await this.#agent.connect();
+			this.#model.textContent = status.model;
+			this.#connected = true;
 			this.#setStatus('Connected', 'connected');
 		} catch {
-			this.#agent = undefined;
-			this.#setStatus('Connection failed', 'failed');
-		} finally {
-			this.#connectButton.disabled = false;
+			if (showFailure) this.#setStatus('Connection failed', 'failed');
 		}
 	}
 
