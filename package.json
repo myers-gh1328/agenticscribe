@@ -24,6 +24,7 @@
 	"dependencies": {
 		"@milkdown/crepe": "^7.21.3",
 		"@myers-gh1328/owner-oidc": "^0.1.0",
+		"@myers-gh1328/pwa-lifecycle": "0.1.0",
 		"@myers-gh1328/runtime-config": "^0.1.0",
 		"dexie": "^4.4.4"
 	},

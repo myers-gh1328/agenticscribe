@@ -2,14 +2,28 @@
 	import { onMount } from 'svelte';
 	import { initializeNotebookApp } from '../notebook-app';
 	import InstallPrompt from '../lib/InstallPrompt.svelte';
+	import { initializePwaUpdates } from '../pwa-updates';
 	import '@milkdown/crepe/theme/common/style.css';
 	import '@milkdown/crepe/theme/classic.css';
 	import '../agent-setup.css';
 	import '../styles.css';
 
 	onMount(() => {
+		let destroyed = false;
+		let destroyPwaUpdates: (() => void) | undefined;
 		void initializeNotebookApp();
-		if ('serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js');
+		if ('serviceWorker' in navigator) {
+			void initializePwaUpdates()
+				.then((updates) => {
+					if (destroyed) updates.destroy();
+					else destroyPwaUpdates = updates.destroy;
+				})
+				.catch(() => {});
+		}
+		return () => {
+			destroyed = true;
+			destroyPwaUpdates?.();
+		};
 	});
 </script>
 

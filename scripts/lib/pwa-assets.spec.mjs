@@ -23,4 +23,10 @@ describe('PWA assets', () => {
 		expect(worker).toContain("pathname.startsWith('/auth/')");
 		expect(worker).toContain('event.respondWith(fetch(request))');
 	});
+
+	it('accepts the shared lifecycle activation message', async () => {
+		const worker = await readFile(resolve('public/sw.js'), 'utf8');
+		expect(worker).toContain("event.data?.type === 'SKIP_WAITING'");
+		expect(worker).toContain('self.skipWaiting()');
+	});
 });

@@ -847,3 +847,70 @@ body {
 		display: none;
 	}
 }
+
+.pwa-update-prompt {
+	position: fixed;
+	right: 18px;
+	bottom: 18px;
+	z-index: 100;
+	display: grid;
+	gap: 8px;
+	width: min(360px, calc(100vw - 36px));
+	border: 1px solid var(--rule);
+	border-radius: 12px;
+	background: var(--paper);
+	box-shadow: 0 18px 48px rgba(22, 25, 24, 0.22);
+	padding: 16px;
+	color: var(--ink);
+}
+
+.pwa-update-prompt[hidden] {
+	display: none;
+}
+
+.pwa-update-prompt > strong {
+	font-size: 1rem;
+}
+
+.pwa-update-prompt > span {
+	color: var(--muted);
+	font-size: 0.9rem;
+	line-height: 1.45;
+}
+
+.pwa-update-prompt > div {
+	display: flex;
+	gap: 8px;
+	justify-content: flex-end;
+}
+
+.pwa-update-prompt button {
+	min-height: 42px;
+	border: 1px solid var(--rule);
+	border-radius: 7px;
+	background: transparent;
+	padding: 0 12px;
+	color: inherit;
+	font: inherit;
+	font-weight: 650;
+	cursor: pointer;
+}
+
+.pwa-update-prompt button:first-child {
+	border-color: var(--saved);
+	background: var(--saved);
+	color: white;
+}
+
+.pwa-update-prompt button:focus-visible {
+	outline: 3px solid #8a6d3b;
+	outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+	.pwa-update-prompt {
+		right: 10px;
+		bottom: 10px;
+		width: calc(100vw - 20px);
+	}
+}
