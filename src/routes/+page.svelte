@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { initializeNotebookApp } from '../notebook-app';
 	import InstallPrompt from '../lib/InstallPrompt.svelte';
+	import ThemeToggle from '../lib/ThemeToggle.svelte';
 	import { initializePwaUpdates } from '../pwa-updates';
 	import '@milkdown/crepe/theme/common/style.css';
 	import '@milkdown/crepe/theme/classic.css';
@@ -33,7 +34,10 @@
 
 <div class="app-shell">
 	<aside class="sidebar" aria-label="Notebook organization">
-		<h1 class="brand">AgenticScribe</h1>
+		<div class="sidebar-header">
+			<h1 class="brand">AgenticScribe</h1>
+			<ThemeToggle />
+		</div>
 		<button class="new-note" id="new-note" type="button">＋ New note</button>
 		<button class="open-markdown" id="open-markdown" type="button" hidden>Open .md file</button>
 

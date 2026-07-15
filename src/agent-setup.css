@@ -121,6 +121,17 @@
 	line-height: 1.5;
 }
 
+:root[data-theme='dark'] .setup-page {
+	background:
+		radial-gradient(circle at 82% 8%, rgba(126, 145, 130, 0.12), transparent 25rem),
+		linear-gradient(135deg, #242925, var(--desk));
+}
+
+:root[data-theme='dark'] .setup-sheet {
+	border-color: rgba(225, 218, 201, 0.15);
+	box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+}
+
 .deployment-detail span {
 	display: block;
 	margin-top: 7px;
@@ -198,7 +209,7 @@
 		padding: 24px 22px 30px;
 	}
 
-	.setup-eyebrow {
+.setup-eyebrow {
 		margin-top: 40px;
 	}
 
@@ -210,4 +221,9 @@
 	.connect-agent {
 		width: 100%;
 	}
+}
+
+:root[data-theme='dark'] .setup-eyebrow,
+:root[data-theme='dark'] .status-pill.failed {
+	color: #e18f78;
 }

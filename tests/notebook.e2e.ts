@@ -59,6 +59,24 @@ test('the notebook exposes discoverable Markdown formatting controls', async ({ 
 	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toBeEditable();
 });
 
+test('dark mode is labeled and persists across reloads', async ({ page }) => {
+	await page.emulateMedia({ colorScheme: 'light' });
+	await openOrganizer(page);
+	const darkMode = page.getByRole('switch', { name: 'Use dark mode' });
+	await expect(darkMode).toBeVisible();
+	await expect(darkMode).toHaveAttribute('aria-checked', 'false');
+	await expect(darkMode).not.toContainText('Dark mode');
+
+	await darkMode.click();
+	await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+	await expect(page.getByRole('switch', { name: 'Use light mode' })).toHaveAttribute('aria-checked', 'true');
+
+	await page.reload();
+	await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+	await openOrganizer(page);
+	await expect(page.getByRole('switch', { name: 'Use light mode' })).toBeVisible();
+});
+
 test('the note screen gives the active note title a distinct heading', async ({ page }) => {
 	await expect(page.getByRole('heading', { level: 2, name: 'Untitled note' })).toBeVisible();
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
