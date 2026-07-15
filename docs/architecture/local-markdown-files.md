@@ -13,7 +13,9 @@ outbox.
 
 - Note text is Markdown source, not rendered HTML.
 - Markdown punctuation, blank lines, Unicode, and trailing-newline state are
-  preserved as text.
+  preserved while a document is opened or switched without editing. Once the
+  rich editor changes a document, Milkdown serializes it to canonical Markdown;
+  semantically equivalent spacing and punctuation may therefore be normalized.
 - Browser editing uses LF internally. A local file remembers whether its input
   used LF or CRLF and restores that style when writing.
 - A UTF-8 byte-order mark is removed for editing and restored when writing.
@@ -35,7 +37,7 @@ file name is displayed; filesystem paths are neither available nor persisted.
 
 ## Commit And Failure Rules
 
-1. Enter snapshots the submitted editor value and stores it as local recovery.
+1. Save thought or Cmd/Ctrl+Enter snapshots the submitted editor value and stores it as local recovery.
 2. If automatic cleanup applies to a newly appended nonblank thought, await it.
 3. On cleanup success, replace only that thought. On cleanup failure, retain
    the raw thought. If cleanup is disabled or unsafe for the edit shape, retain
@@ -51,7 +53,7 @@ document from the app never deletes its source file.
 
 ## Non-goals
 
-- Markdown rendering or preview.
+- A separate Markdown source or preview mode.
 - Directory selection, discovery, or background watching.
 - Uploading, synchronizing, or promoting a local document to SQLite.
 - Moving, renaming, or deleting the source file.

@@ -18,12 +18,18 @@ enforcement. SvelteKit does not replace or duplicate those server concerns.
 ## Migration Boundary
 
 The Svelte page owns the approved application markup, CSS imports, document
-metadata, and browser mount lifecycle. The existing note-taking controller is
-loaded from `onMount` so its established storage, synchronization, cleanup,
-local-file, keyboard, and focus contracts remain unchanged during the framework
-migration. Future conversion of controller behavior into reactive Svelte
-components must proceed in test-first vertical slices without maintaining a
-second state or persistence implementation.
+metadata, and browser mount lifecycle. The note-taking controller is loaded
+from `onMount` and talks to the Milkdown Crepe editor through a small adapter.
+The adapter owns Markdown replacement, serialization, labeled toolbar controls,
+readonly state, keyboard forwarding, and focus; the controller remains the only
+owner of storage, synchronization, cleanup, and local-file behavior. Future
+conversion of controller behavior into reactive Svelte components must proceed
+in test-first vertical slices without maintaining a second state or persistence
+implementation.
+
+The visible toolbar is intentionally limited to headings, emphasis, lists,
+links, code blocks, quotes, and horizontal rules. Image, table, math, AI, and
+collaboration features remain disabled and outside the core note-taking boundary.
 
 ## Build And Offline Contract
 

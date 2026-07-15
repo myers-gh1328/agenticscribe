@@ -1,4 +1,4 @@
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 const capability = 'aegirtech.dev/cap/agenticscribe';
 
@@ -28,9 +28,21 @@ async function openOrganizer(page: Page) {
 
 async function saveThought(page: Page, text: string) {
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
-	await editor.fill(text);
-	await editor.press('Enter');
+	await editor.click();
+	await editor.pressSequentially(text);
+	await expectEditorMarkdown(page, `${text}\n`);
+	await editor.press('Control+Enter');
 	await expect(page.getByRole('status')).toContainText('Thought saved to server');
+}
+
+async function expectEditorMarkdown(page: Page, markdown: string) {
+	await expect(page.locator('#editor')).toHaveAttribute('data-markdown', markdown);
+}
+
+async function replaceEditorText(editor: Locator, text: string) {
+	await editor.click();
+	await editor.press('Control+A');
+	await editor.pressSequentially(text);
 }
 
 test.beforeEach(async ({ page }, testInfo) => {
@@ -38,7 +50,56 @@ test.beforeEach(async ({ page }, testInfo) => {
 	await page.goto('/');
 });
 
+test('the notebook exposes discoverable Markdown formatting controls', async ({ page }) => {
+	await expect(page.locator('html')).toHaveAttribute('data-notebook-ready', 'true');
+	await expect(page.getByRole('button', { name: 'Bold' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Bullet list' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Link' })).toBeVisible();
+	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toBeEditable();
+});
+
+test('Enter creates a new block and explicit save commits the Markdown document', async ({ page }) => {
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await editor.click();
+	await editor.pressSequentially('First paragraph');
+	await editor.press('Enter');
+	await editor.pressSequentially('Second paragraph');
+
+	await expect(editor.locator('p')).toHaveCount(2);
+	await expect(page.getByRole('status')).toContainText('Nothing saved yet');
+	await page.getByRole('button', { name: 'Save thought' }).click();
+	await expect(page.getByRole('status')).toContainText('Thought saved to server');
+});
+
+test('Markdown shortcuts render as formatted content while typing', async ({ page }) => {
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await editor.click();
+	await editor.pressSequentially('# ');
+	await editor.pressSequentially('Rendered heading');
+
+	await expect(editor.getByRole('heading', { level: 1, name: 'Rendered heading' })).toBeVisible();
+});
+
+test('raw Markdown mode round-trips source edits back into the visual editor', async ({ page }) => {
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await editor.click();
+	await editor.pressSequentially('# ');
+	await editor.pressSequentially('Visual heading');
+
+	await page.getByRole('button', { name: 'Markdown' }).click();
+	const source = page.getByRole('textbox', { name: 'Raw Markdown' });
+	await expect(source).toBeVisible();
+	await expect(source).toHaveValue('# Visual heading\n');
+	await source.fill('## Edited in Markdown\n\n**Still portable.**\n');
+
+	await page.getByRole('button', { name: 'Visual' }).click();
+	await expect(editor.getByRole('heading', { level: 2, name: 'Edited in Markdown' })).toBeVisible();
+	await expect(editor.locator('strong')).toHaveText('Still portable.');
+	await expectEditorMarkdown(page, '## Edited in Markdown\n\n**Still portable.**\n');
+});
+
 test('offers the browser install prompt without making the user hunt for it', async ({ page }) => {
+	await expect(page.locator('html')).toHaveAttribute('data-notebook-ready', 'true');
 	await page.evaluate(() => {
 		const installEvent = new Event('beforeinstallprompt', { cancelable: true });
 		Object.defineProperty(installEvent, 'prompt', {
@@ -100,9 +161,7 @@ test('a committed note survives loss of the original browser profile', async ({ 
 	try {
 		const replacementPage = await replacementProfile.newPage();
 		await replacementPage.goto('http://127.0.0.1:4173/');
-		await expect(replacementPage.getByRole('textbox', { name: 'Continuous note' })).toHaveValue(
-			'Stored on nanobot\n'
-		);
+		await expectEditorMarkdown(replacementPage, 'Stored on nanobot\n');
 	} finally {
 		await replacementProfile.close();
 	}
@@ -115,8 +174,9 @@ test('an offline commit syncs after reconnect and survives a new browser profile
 }, testInfo) => {
 	await context.setOffline(true);
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
-	await editor.fill('Written without a connection');
-	await editor.press('Enter');
+	await replaceEditorText(editor, 'Written without a connection');
+	await expectEditorMarkdown(page, 'Written without a connection\n');
+	await editor.press('Control+Enter');
 	await expect(page.getByRole('status')).toContainText('Thought saved offline — pending sync');
 
 	await context.setOffline(false);
@@ -129,9 +189,7 @@ test('an offline commit syncs after reconnect and survives a new browser profile
 	try {
 		const replacementPage = await replacementProfile.newPage();
 		await replacementPage.goto('http://127.0.0.1:4173/');
-		await expect(replacementPage.getByRole('textbox', { name: 'Continuous note' })).toHaveValue(
-			'Written without a connection\n'
-		);
+		await expectEditorMarkdown(replacementPage, 'Written without a connection\n');
 	} finally {
 		await replacementProfile.close();
 	}
@@ -151,7 +209,7 @@ test('deployment-managed agent setup is reachable without browser-owned connecti
 	await expect(page.getByText('Not connected', { exact: true })).toBeVisible();
 
 	await page.getByRole('button', { name: 'Back to notes' }).click();
-	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toHaveValue('Keep this note\n');
+	await expectEditorMarkdown(page, 'Keep this note\n');
 });
 
 test('connecting the local agent cleans only a thought after it is saved', async ({ page }) => {
@@ -187,16 +245,17 @@ test('connecting the local agent cleans only a thought after it is saved', async
 	await page.getByRole('button', { name: 'Back to notes' }).click();
 
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
-	await editor.fill('this thought have bad grammer.');
-	await editor.press('Enter');
+	await replaceEditorText(editor, 'this thought have bad grammer.');
+	await expectEditorMarkdown(page, 'this thought have bad grammer.\n');
+	await editor.press('Control+Enter');
 	await cleanupRequest;
-	await expect(editor).toHaveValue('this thought have bad grammer.\n');
+	await expectEditorMarkdown(page, 'this thought have bad grammer.\n');
 	releaseCleanup();
-	await expect(editor).toHaveValue('This thought has bad grammar.\n');
+	await expectEditorMarkdown(page, 'This thought has bad grammar.\n');
 	await expect(page.getByRole('status')).toContainText('Thought cleaned and saved');
 
 	await page.reload();
-	await expect(editor).toHaveValue('This thought has bad grammar.\n');
+	await expectEditorMarkdown(page, 'This thought has bad grammar.\n');
 });
 
 test('a failed cleanup keeps the submitted thought unchanged', async ({ page }) => {
@@ -219,13 +278,14 @@ test('a failed cleanup keeps the submitted thought unchanged', async ({ page }) 
 	await page.getByRole('button', { name: 'Back to notes' }).click();
 
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
-	await editor.fill('keep this raw thought');
-	await editor.press('Enter');
+	await replaceEditorText(editor, 'keep this raw thought');
+	await expectEditorMarkdown(page, 'keep this raw thought\n');
+	await editor.press('Control+Enter');
 	await expect(page.getByRole('status')).toContainText('Cleanup failed — original kept');
-	await expect(editor).toHaveValue('keep this raw thought\n');
+	await expectEditorMarkdown(page, 'keep this raw thought\n');
 
 	await page.reload();
-	await expect(editor).toHaveValue('keep this raw thought\n');
+	await expectEditorMarkdown(page, 'keep this raw thought\n');
 });
 
 test('a local Markdown file writes locally without creating a notebook mutation', async ({ page }) => {
@@ -258,10 +318,12 @@ test('a local Markdown file writes locally without creating a notebook mutation'
 	await openOrganizer(page);
 	await page.getByRole('button', { name: 'Open .md file' }).click();
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
-	await expect(editor).toHaveValue('# Local notes\n');
-	await editor.press('End');
-	await editor.type('Saved only here');
-	await editor.press('Enter');
+	await expectEditorMarkdown(page, '# Local notes\n');
+	await expect(page.locator('body')).not.toHaveClass(/sidebar-open/);
+	await editor.locator('p').last().click();
+	await editor.pressSequentially('Saved only here');
+	await expectEditorMarkdown(page, '# Local notes\n\nSaved only here\n');
+	await editor.press('Control+Enter');
 	await expect(page.getByRole('status')).toContainText('Saved to local file');
 
 	const fileText = await page.evaluate(async () => {
@@ -269,24 +331,22 @@ test('a local Markdown file writes locally without creating a notebook mutation'
 		const handle = await root.getFileHandle('local-notes.md');
 		return (await handle.getFile()).text();
 	});
-	expect(fileText).toBe('# Local notes\nSaved only here\n');
+	expect(fileText).toBe('# Local notes\n\nSaved only here\n');
 	expect(notebookMutations).toBe(0);
 });
 
-test('Enter commits a note and reload restores only committed text', async ({ page }) => {
+test('explicit save commits a note and reload restores only committed text', async ({ page }) => {
 	await saveThought(page, 'First saved thought');
 	await openOrganizer(page);
 	await expect(page.getByRole('button', { name: 'First saved thought', exact: true })).toBeVisible();
 
 	await page.reload();
-	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toHaveValue(
-		'First saved thought\n'
-	);
+	await expectEditorMarkdown(page, 'First saved thought\n');
 });
 
 test('the organizer stays pinned while a long note scrolls', async ({ page }) => {
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
-	await editor.fill(Array.from({ length: 80 }, (_, index) => `Line ${index + 1}`).join('\n'));
+	await replaceEditorText(editor, Array.from({ length: 80 }, (_, index) => `Line ${index + 1}`).join('\n'));
 	await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 
 	const organizer = page.getByRole('complementary', { name: 'Notebook organization' });
@@ -301,28 +361,26 @@ test('switching and reload preserve an unfinished draft locally', async ({ page 
 	await openOrganizer(page);
 	await expect(page.getByRole('button', { name: 'First note', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Untitled note unsaved', exact: true })).toBeVisible();
-	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toHaveValue('');
+	await expectEditorMarkdown(page, '');
 	await saveThought(page, 'Second note');
 
 	await openOrganizer(page);
 	await expect(page.getByRole('button', { name: 'Second note', exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'First note', exact: true }).click();
-	await page.getByRole('textbox', { name: 'Continuous note' }).press('End');
-	await page.getByRole('textbox', { name: 'Continuous note' }).type(' unsaved tail');
+	const firstNoteEditor = page.getByRole('textbox', { name: 'Continuous note' });
+	await firstNoteEditor.locator('p').last().click();
+	await firstNoteEditor.pressSequentially('unsaved tail');
+	await expectEditorMarkdown(page, 'First note\n\nunsaved tail\n');
 	await openOrganizer(page);
 	await page.getByRole('button', { name: 'Second note', exact: true }).click();
 	await openOrganizer(page);
 	await page.getByRole('button', { name: 'First note', exact: true }).click();
-	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toHaveValue(
-		'First note\n unsaved tail'
-	);
+	await expectEditorMarkdown(page, 'First note\n\nunsaved tail\n');
 
 	await page.reload();
 	await openOrganizer(page);
 	await page.getByRole('button', { name: 'First note', exact: true }).click();
-	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toHaveValue(
-		'First note\n unsaved tail'
-	);
+	await expectEditorMarkdown(page, 'First note\n\nunsaved tail\n');
 });
 
 test('a new note is created directly inside the selected folder', async ({ page }) => {
@@ -382,10 +440,10 @@ test('deletion requires confirmation and deleting the final note leaves a blank 
 	await page.getByRole('button', { name: 'Actions for Delete carefully' }).click();
 	await page.getByRole('menuitem', { name: 'Delete note' }).click();
 	await page.getByRole('button', { name: 'Delete note' }).click();
-	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toHaveValue('');
+	await expectEditorMarkdown(page, '');
 	await openOrganizer(page);
 	await expect(page.getByRole('button', { name: 'Untitled note unsaved', exact: true })).toBeVisible();
 
 	await page.reload();
-	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toHaveValue('');
+	await expectEditorMarkdown(page, '');
 });

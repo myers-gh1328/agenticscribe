@@ -17,6 +17,7 @@ import {
 } from './browser-markdown-file';
 import { LocalMarkdownConflictError, LocalMarkdownDocument } from './local-markdown-document';
 import { LocalMarkdownStore, type LocalMarkdownBinding } from './local-markdown-store';
+import { MarkdownEditor } from './markdown-editor';
 
 interface NotebookNote {
 	id: string;
@@ -32,9 +33,10 @@ export async function initializeNotebookApp() {
 	if (initialized) return;
 	initialized = true;
 
-const editor = requireElement<HTMLTextAreaElement>('#editor');
+const editor = await MarkdownEditor.create(requireElement<HTMLElement>('#editor'));
 const state = requireElement<HTMLElement>('#capture-state');
 const stateText = requireElement<HTMLElement>('#state-text');
+const saveThought = requireElement<HTMLButtonElement>('#save-thought');
 const newNote = requireElement<HTMLButtonElement>('#new-note');
 const openMarkdown = requireElement<HTMLButtonElement>('#open-markdown');
 const localFilesSection = requireElement<HTMLElement>('#local-files-section');
@@ -125,10 +127,11 @@ async function activateLocalFile(binding: LocalMarkdownBinding, requestPermissio
 		editor.value = binding.recoveryText ?? document.text;
 		state.classList.remove('saved');
 		stateText.textContent = binding.recoveryText
-			? 'Recovered local edits — press Enter to save'
+			? 'Recovered local edits — use Save thought to save'
 			: 'Local file — changes stay on this device';
 		renderLocation();
 		renderLocalFiles();
+		globalThis.document.body.classList.remove('sidebar-open');
 		fitEditor();
 		editor.focus();
 	} catch (error) {
@@ -572,8 +575,7 @@ async function deleteNote(noteId: string) {
 }
 
 function fitEditor() {
-	editor.style.height = 'auto';
-	editor.style.height = `${Math.max(window.innerHeight - 54, editor.scrollHeight)}px`;
+	editor.fit();
 }
 
 function showSaved(synchronized: boolean) {
@@ -679,9 +681,7 @@ renderFolders();
 openMarkdown.hidden = !supportsLocalMarkdownFiles();
 renderLocalFiles();
 
-editor.addEventListener('keydown', (event) => {
-	if (event.key !== 'Enter' || event.shiftKey) return;
-	event.preventDefault();
+function commitEditor() {
 	const note = activeNote();
 	if (activeLocal) {
 		const local = activeLocal;
@@ -745,7 +745,15 @@ editor.addEventListener('keydown', (event) => {
 		fitEditor();
 		if (submitted.appended) void cleanSubmittedThought(note.id, thoughtId, submitted.rawThought);
 	})();
+}
+
+editor.addEventListener('keydown', (event) => {
+	if (event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) return;
+	event.preventDefault();
+	commitEditor();
 });
+
+saveThought.addEventListener('click', commitEditor);
 
 editor.addEventListener('input', () => {
 	if (activeLocal) {
@@ -765,7 +773,10 @@ editor.addEventListener('input', () => {
 });
 
 newNote.addEventListener('click', createNewNote);
-openMarkdown.addEventListener('click', () => void openLocalMarkdown());
+openMarkdown.addEventListener('click', () => {
+	document.body.classList.remove('sidebar-open');
+	void openLocalMarkdown();
+});
 cancelDelete.addEventListener('click', closeDeleteDialog);
 confirmDelete.addEventListener('click', () => {
 	const noteId = pendingDeleteNoteId;

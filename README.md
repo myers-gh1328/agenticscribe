@@ -11,17 +11,17 @@ checks, and static delivery. See
 
 ## Current functionality
 
-- Enter commits immediately to IndexedDB and synchronizes to the private server.
-- Shift+Enter adds a line without committing.
+- Enter creates a new paragraph in the Markdown editor.
+- Save thought or Cmd/Ctrl+Enter commits immediately to IndexedDB and synchronizes to the private server.
 - Uncommitted text is kept as a browser-local draft so it survives switching and reload.
 - Notes can be created, switched, moved, and permanently deleted with confirmation.
-- Markdown source is preserved through local storage and server synchronization.
+- Markdown can be edited through a discoverable visual toolbar or as raw source, and is stored as portable Markdown.
 - In supported secure-context browsers, an explicitly selected `.md` file can be edited as a local-only document and written back after optional cleanup finishes.
 - Notes begin in Scratchpad or in the folder selected before creation.
 - Folders can be created, nested, and renamed.
 - Desktop and mobile use the same note-taking workflow.
 - A deployment-managed OpenAI-compatible agent can be checked from Agent setup.
-- When enabled, Enter saves the raw thought first and then sends only that thought for spelling and grammar cleanup.
+- When enabled, an explicit save stores the raw thought first and then sends only that thought for spelling and grammar cleanup.
 - Failed cleanup leaves the original thought unchanged and does not retry automatically.
 
 Deployments may enforce single-tenant Microsoft Entra authentication, enforce

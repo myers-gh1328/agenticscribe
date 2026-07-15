@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { initializeNotebookApp } from '../notebook-app';
 	import InstallPrompt from '../lib/InstallPrompt.svelte';
+	import '@milkdown/crepe/theme/common/style.css';
+	import '@milkdown/crepe/theme/classic.css';
 	import '../agent-setup.css';
 	import '../styles.css';
 
@@ -63,19 +65,12 @@
 
 	<div class="workspace">
 		<main class="note" aria-label="Note">
-			<!-- svelte-ignore a11y_autofocus (The continuous capture editor is the page's primary action.) -->
-			<textarea
-				id="editor"
-				disabled
-				autofocus
-				spellcheck="true"
-				aria-label="Continuous note"
-				placeholder="Start with a thought…"
-			></textarea>
+			<div id="editor" aria-label="Continuous note editor"></div>
 		</main>
 		<div class="capture-state" id="capture-state" role="status" aria-live="polite">
 			<span id="state-text">Nothing saved yet</span>
-			<span class="shortcut">Enter saves thought · Shift + Enter adds a line</span>
+			<button id="save-thought" type="button">Save thought</button>
+			<span class="shortcut">⌘/Ctrl + Enter saves</span>
 		</div>
 	</div>
 
@@ -104,7 +99,7 @@
 					<label class="setup-option">
 						<input name="automaticCleanup" type="checkbox" checked />
 						<span>
-							Clean each thought after Enter
+							Clean each thought after saving
 							<small>Only spelling, grammar, capitalization, and punctuation.</small>
 						</span>
 					</label>
