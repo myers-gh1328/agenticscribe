@@ -115,7 +115,7 @@ test('raw Markdown mode round-trips source edits back into the visual editor', a
 	await editor.pressSequentially('Visual heading');
 	await expectEditorMarkdown(page, 'Visual heading\n');
 
-	await page.getByRole('button', { name: 'Markdown' }).click();
+	await page.getByRole('button', { name: 'Markdown', exact: true }).click();
 	const source = page.getByRole('textbox', { name: 'Raw Markdown' });
 	await expect(source).toBeVisible();
 	await expect(source).toHaveValue('Visual heading\n');
@@ -281,6 +281,48 @@ test('deployment-managed agent setup is reachable without browser-owned connecti
 	await expectEditorMarkdown(page, 'Keep this note\n');
 });
 
+test('a distillation is saved as the final version of its raw note and survives reload', async ({ page }) => {
+	const source = 'Project update\n\nDecision: ship the modal';
+	const distilled = '# Summary\n\nThe project is ready.\n\n## Action items\n\n- Ship the modal';
+	await page.route('**/api/agent/distill', async (route) => {
+		expect(route.request().postDataJSON()).toEqual({ note: `${source}\n` });
+		await route.fulfill({ json: { distilledNote: distilled } });
+	});
+	await page.getByRole('button', { name: 'Markdown', exact: true }).click();
+	await page.getByRole('textbox', { name: 'Raw Markdown' }).fill(`${source}\n`);
+	await page.getByRole('button', { name: 'Visual' }).click();
+	await expectEditorMarkdown(page, `${source}\n`);
+	await page.getByRole('button', { name: 'Save thought' }).click();
+	await expect(page.getByRole('status')).toContainText('Thought saved to server');
+
+	const markdownDownload = page.waitForEvent('download');
+	await page.getByRole('button', { name: 'Export note as Markdown' }).click();
+	await expect((await markdownDownload).suggestedFilename()).toBe('Project-update.md');
+
+	await page.getByRole('button', { name: 'Distill note' }).click();
+	const dialog = page.getByRole('dialog', { name: 'Distilled Project update' });
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByText('The entire current note is sent to your deployment-managed agent.')).toBeVisible();
+	await expect(dialog.getByText('The project is ready.')).toBeVisible();
+	await expectEditorMarkdown(page, `${source}\n`);
+
+	const textDownload = page.waitForEvent('download');
+	await dialog.getByRole('button', { name: 'Export distilled text' }).click();
+	await expect((await textDownload).suggestedFilename()).toBe('Project-update-distilled.txt');
+
+	await dialog.getByRole('button', { name: 'Use as final version' }).click();
+	await expect(dialog).not.toBeVisible();
+	await expectEditorMarkdown(page, `${distilled}\n`);
+	await expect(page.getByRole('button', { name: 'Final version', pressed: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Raw version' }).click();
+	await expectEditorMarkdown(page, `${source}\n`);
+	await page.reload();
+	await page.getByRole('button', { name: 'Final version' }).click();
+	await expectEditorMarkdown(page, `${distilled}\n`);
+	await openOrganizer(page);
+	await expect(page.getByRole('button', { name: 'Project update', exact: true })).toHaveCount(1);
+});
+
 test('connecting the local agent cleans only a thought after it is saved', async ({ page }) => {
 	let statusRequests = 0;
 	await page.route('**/api/agent/status', async (route) => {
@@ -388,6 +430,7 @@ test('a local Markdown file writes locally without creating a notebook mutation'
 	await page.getByRole('button', { name: 'Open .md file' }).click();
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
 	await expectEditorMarkdown(page, '# Local notes\n');
+	await expect(page.getByRole('button', { name: 'Distill note' })).toBeDisabled();
 	await expect(page.locator('body')).not.toHaveClass(/sidebar-open/);
 	await editor.locator('p').last().click();
 	await editor.pressSequentially('Saved only here');

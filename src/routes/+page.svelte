@@ -85,7 +85,18 @@
 		<main class="note" aria-label="Note">
 			<header class="note-identity">
 				<span>Current note</span>
-				<h2 id="note-title-display">Untitled note</h2>
+				<div class="note-heading-row">
+					<h2 id="note-title-display">Untitled note</h2>
+					<div class="note-versions" id="note-versions" aria-label="Note version" hidden>
+						<button id="show-raw-version" type="button" aria-pressed="true">Raw version</button>
+						<button id="show-final-version" type="button" aria-pressed="false">Final version</button>
+					</div>
+					<div class="note-actions" aria-label="Note actions">
+						<button id="distill-note" type="button">Distill note</button>
+						<button id="export-note-markdown" type="button" aria-label="Export note as Markdown">Export .md</button>
+						<button id="export-note-text" type="button" aria-label="Export note as text">Export .txt</button>
+					</div>
+				</div>
 			</header>
 			<div id="editor" aria-label="Continuous note editor"></div>
 		</main>
@@ -149,4 +160,24 @@
 			<button class="confirm-delete" id="confirm-delete" type="button">Delete note</button>
 		</div>
 	</div>
+</dialog>
+
+<dialog class="distill-dialog" id="distill-dialog" aria-labelledby="distill-dialog-title">
+	<section class="distill-sheet">
+		<header>
+			<div>
+				<p class="distill-eyebrow">AI distillation</p>
+				<h2 id="distill-dialog-title">Distilled note</h2>
+			</div>
+			<button id="close-distill" class="distill-close" type="button" aria-label="Close distillation">×</button>
+		</header>
+		<p class="distill-disclosure">The entire current note is sent to your deployment-managed agent.</p>
+		<p id="distill-status" class="distill-status" role="status" aria-live="polite">Distilling note…</p>
+		<pre id="distill-result" class="distill-result" hidden></pre>
+		<footer>
+			<button id="save-distilled-note" class="distill-primary" type="button" disabled>Use as final version</button>
+			<button id="export-distilled-markdown" type="button" disabled>Export distilled Markdown</button>
+			<button id="export-distilled-text" type="button" disabled>Export distilled text</button>
+		</footer>
+	</section>
 </dialog>

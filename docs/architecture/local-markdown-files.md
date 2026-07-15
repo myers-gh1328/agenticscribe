@@ -31,6 +31,10 @@ They do not use `NotebookStore`, `/api/notebook`, SQLite, the notebook outbox,
 folders, or server conflict records. Other devices therefore cannot discover
 them.
 
+Local documents can be exported to `.md` or `.txt` entirely in the browser.
+They cannot use whole-note distillation because that would cross the local-file
+boundary and send the document to the deployment-managed agent.
+
 The browser file picker must be invoked by a user gesture. File permission can
 expire and must be re-requested from a user gesture. Only the browser-provided
 file name is displayed; filesystem paths are neither available nor persisted.

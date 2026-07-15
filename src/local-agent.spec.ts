@@ -64,4 +64,39 @@ describe('LocalAgent', () => {
 			signal: expect.any(AbortSignal)
 		});
 	});
+
+	it('sends the current note to the bounded same-origin distillation API', async () => {
+		const request = vi.fn<typeof fetch>().mockResolvedValue(
+			Response.json({ distilledNote: '# Summary\n\nA concise result.' })
+		);
+
+		await expect(new LocalAgent(request).distillNote('# Raw note')).resolves.toBe(
+			'# Summary\n\nA concise result.'
+		);
+		expect(request).toHaveBeenCalledWith('/api/agent/distill', {
+			method: 'POST',
+			headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+			body: JSON.stringify({ note: '# Raw note' }),
+			signal: expect.any(AbortSignal)
+		});
+	});
+
+	it.each([
+		[413, 'This note is too large to distill.'],
+		[503, 'The deployment-managed agent is busy or unavailable.'],
+		[504, 'The deployment-managed agent took too long to respond.'],
+		[502, 'The deployment-managed agent could not distill this note.']
+	])('maps distillation status %i to a useful error', async (status, message) => {
+		const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({}, { status }));
+
+		await expect(new LocalAgent(request).distillNote('A note')).rejects.toThrow(message);
+	});
+
+	it('rejects an empty distillation', async () => {
+		const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ distilledNote: '  ' }));
+
+		await expect(new LocalAgent(request).distillNote('A note')).rejects.toThrow(
+			'The deployment-managed agent returned an empty distillation.'
+		);
+	});
 });

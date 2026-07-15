@@ -71,11 +71,16 @@ is not immediate in historical encrypted snapshots.
 
 The browser also uses a narrow same-origin `/api/agent` contract. The server,
 not the browser, owns the OpenAI-compatible base URL, installed model ID,
-cleanup prompt, timeouts, and upstream request shape. Deployments can require
+cleanup and distillation prompts, timeouts, and upstream request shape. Deployments can require
 verified Tailscale identity and capability headers or disable that gate on a
-trusted private LAN. Cleanup always requires the canonical Origin, same-origin
-Fetch Metadata, and bounded JSON. The API is not a generic completion proxy and
+trusted private LAN. Cleanup and distillation always require the canonical Origin,
+same-origin Fetch Metadata, and bounded JSON. Distillation accepts exactly one
+nonblank current-note string, shares the bounded concurrency and response limits,
+does not retry automatically, and returns untrusted Markdown as text. The API is not a generic completion proxy and
 never accepts a caller-selected endpoint, model, prompt, or messages array.
+An accepted result is persisted as the note's optional `finalText` alongside its
+Raw `text`; legacy rows migrate with no Final version, and both fields share the
+existing note mutation, conflict, ownership, and synchronization boundary.
 
 ## Initial Browser Migration
 

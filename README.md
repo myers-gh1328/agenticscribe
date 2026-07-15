@@ -24,11 +24,14 @@ checks, and static delivery. See
 - A deployment-managed OpenAI-compatible agent can be checked from Agent setup.
 - When enabled, an explicit save stores the raw thought first and then sends only that thought for spelling and grammar cleanup.
 - Failed cleanup leaves the original thought unchanged and does not retry automatically.
+- An explicit Distill note action sends the current synchronized Raw version to the deployment-managed agent and presents a reviewable result without changing the source.
+- Accepting a distillation stores it as the same note's read-only Final version; Raw and Final sync together and can be switched in place.
+- Current notes and completed distillations can be exported locally as portable Markdown or plain text.
 
 Deployments may enforce single-tenant Microsoft Entra authentication, enforce
 identity and application capability headers, or run on a trusted private LAN.
 Each authenticated owner receives an isolated notebook. The app does not
-implement collaboration, voice, summaries, finalization, or sharing.
+implement collaboration, voice, autonomous finalization, or sharing.
 
 ## Requirements
 
@@ -89,10 +92,16 @@ agent endpoint and model configuration, and the browser uses the same-origin
 AgenticScribe API. When
 automatic cleanup is enabled, only the newly submitted thought is sent to the
 deployment-managed endpoint; the original is retained with the note.
+Distillation is separate and never automatic: clicking Distill note sends a
+snapshot of the entire visible synchronized Raw version. The result remains a
+review-only preview until the user accepts it as that note's Final version. Raw
+is never replaced; accepted Final content is stored and synchronized with the
+same note.
 
 Local Markdown file handles, recovery text, and link state remain in a separate
 browser-local IndexedDB database. They are never sent through the notebook API
-or stored in SQLite, so other devices do not see those files. Removing a local
+or distillation API and are not stored in SQLite, so other devices do not see
+those files. Local files can still be exported without network access. Removing a local
 file link never deletes the source file. Browser permission may need to be
 granted again after a restart. See
 [`docs/architecture/local-markdown-files.md`](docs/architecture/local-markdown-files.md).

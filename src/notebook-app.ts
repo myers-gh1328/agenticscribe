@@ -18,10 +18,13 @@ import {
 import { LocalMarkdownConflictError, LocalMarkdownDocument } from './local-markdown-document';
 import { LocalMarkdownStore, type LocalMarkdownBinding } from './local-markdown-store';
 import { MarkdownEditor } from './markdown-editor';
+import { LocalAgent } from './local-agent';
+import { downloadNote } from './note-export';
 
 interface NotebookNote {
 	id: string;
 	savedText: string;
+	finalText?: string;
 	thoughts: ThoughtBoundary[];
 	location: string;
 	persisted: boolean;
@@ -47,6 +50,12 @@ const notesList = requireElement<HTMLElement>('#notes-list');
 const emptyLocation = requireElement<HTMLElement>('#empty-location');
 const locationName = requireElement<HTMLElement>('#location-name');
 const noteTitleDisplay = requireElement<HTMLElement>('#note-title-display');
+const noteVersions = requireElement<HTMLElement>('#note-versions');
+const showRawVersion = requireElement<HTMLButtonElement>('#show-raw-version');
+const showFinalVersion = requireElement<HTMLButtonElement>('#show-final-version');
+const distillNote = requireElement<HTMLButtonElement>('#distill-note');
+const exportNoteMarkdown = requireElement<HTMLButtonElement>('#export-note-markdown');
+const exportNoteText = requireElement<HTMLButtonElement>('#export-note-text');
 const scratchpadCount = requireElement<HTMLElement>('#scratchpad-count');
 const folderList = requireElement<HTMLElement>('#folder-list');
 const addRootFolder = requireElement<HTMLButtonElement>('#add-root-folder');
@@ -54,6 +63,14 @@ const deleteDialog = requireElement<HTMLDialogElement>('#delete-dialog');
 const deleteNoteName = requireElement<HTMLElement>('#delete-note-name');
 const cancelDelete = requireElement<HTMLButtonElement>('#cancel-delete');
 const confirmDelete = requireElement<HTMLButtonElement>('#confirm-delete');
+const distillDialog = requireElement<HTMLDialogElement>('#distill-dialog');
+const distillDialogTitle = requireElement<HTMLElement>('#distill-dialog-title');
+const distillStatus = requireElement<HTMLElement>('#distill-status');
+const distillResult = requireElement<HTMLElement>('#distill-result');
+const closeDistill = requireElement<HTMLButtonElement>('#close-distill');
+const saveDistilledNote = requireElement<HTMLButtonElement>('#save-distilled-note');
+const exportDistilledMarkdown = requireElement<HTMLButtonElement>('#export-distilled-markdown');
+const exportDistilledText = requireElement<HTMLButtonElement>('#export-distilled-text');
 const workspace = requireElement<HTMLElement>('.workspace');
 const setupPage = requireElement<HTMLElement>('#setup-page');
 await initializeNotebookIdentity();
@@ -71,6 +88,7 @@ let activeLocal: { binding: LocalMarkdownBinding; document: LocalMarkdownDocumen
 let notes: NotebookNote[] = storedNotes.map((note) => ({
 	id: note.id,
 	savedText: note.text,
+	finalText: note.finalText,
 	thoughts: note.thoughts,
 	location: note.location,
 	persisted: true
@@ -94,6 +112,9 @@ let renamingFolderId: string | undefined;
 let stateTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingDeleteNoteId: string | undefined;
 let deleteReturnFocus: HTMLElement | undefined;
+let distilledMarkdown = '';
+let distilledSourceTitle = '';
+let viewingFinal = false;
 
 function createId() {
 	return `note-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -119,6 +140,29 @@ function displayedNoteTitle() {
 
 function renderNoteTitle() {
 	noteTitleDisplay.textContent = displayedNoteTitle();
+	distillNote.disabled = Boolean(activeLocal);
+	distillNote.title = activeLocal ? 'Local files stay on this device and cannot be sent for distillation.' : '';
+}
+
+function renderVersion() {
+	const note = activeNote();
+	const hasFinal = Boolean(!activeLocal && note?.finalText);
+	noteVersions.hidden = !hasFinal;
+	if (!hasFinal) viewingFinal = false;
+	showRawVersion.setAttribute('aria-pressed', String(!viewingFinal));
+	showFinalVersion.setAttribute('aria-pressed', String(viewingFinal));
+	editor.disabled = viewingFinal;
+	saveThought.disabled = viewingFinal;
+}
+
+function showVersion(final: boolean) {
+	const note = activeNote();
+	if (!note || activeLocal || (final && !note.finalText)) return;
+	if (!viewingFinal) drafts.set(note.id, editor.value);
+	viewingFinal = final;
+	editor.value = final ? `${note.finalText!.replace(/\n?$/, '\n')}` : currentText(note);
+	renderVersion();
+	fitEditor();
 }
 
 function localRecovery(binding: LocalMarkdownBinding) {
@@ -482,8 +526,10 @@ function selectNote(noteId: string) {
 	const next = notes.find((note) => note.id === noteId);
 	if (!next) return;
 	activeNoteId = noteId;
+	viewingFinal = false;
 	selectedLocation = next.location;
 	editor.value = currentText(next);
+	renderVersion();
 	state.classList.remove('saved');
 	stateText.textContent = next.persisted ? savedStateText() : 'Nothing saved yet';
 	renderLocation();
@@ -509,7 +555,9 @@ function createNewNote() {
 	notes.unshift(note);
 	drafts.set(note.id, '');
 	activeNoteId = note.id;
+	viewingFinal = false;
 	editor.value = '';
+	renderVersion();
 	state.classList.remove('saved');
 	stateText.textContent = 'Nothing saved yet';
 	renderLocation();
@@ -637,7 +685,7 @@ async function refreshNotebookFromServer() {
 
 	const [storedNotes, storedFolders] = await Promise.all([store.listNotes(), store.listFolders()]);
 	const previousNotes = new Map(notes.map((note) => [note.id, note]));
-	const refreshedNotes = storedNotes.map((stored) => {
+	const refreshedNotes: NotebookNote[] = storedNotes.map((stored) => {
 		const previous = previousNotes.get(stored.id);
 		const hasLocalChanges = previous
 			? (stored.id === activeNoteId && editorHasFocus) || drafts.get(stored.id) !== previous.savedText
@@ -646,6 +694,7 @@ async function refreshNotebookFromServer() {
 		return {
 			id: stored.id,
 			savedText: stored.text,
+			finalText: stored.finalText,
 			thoughts: stored.thoughts,
 			location: stored.location,
 			persisted: true
@@ -661,6 +710,7 @@ async function refreshNotebookFromServer() {
 		return !refreshed
 			|| note.id !== refreshed.id
 			|| note.savedText !== refreshed.savedText
+			|| note.finalText !== refreshed.finalText
 			|| note.location !== refreshed.location
 			|| note.persisted !== refreshed.persisted
 			|| JSON.stringify(note.thoughts) !== JSON.stringify(refreshed.thoughts);
@@ -677,8 +727,11 @@ async function refreshNotebookFromServer() {
 
 	if (!activeLocal && activeNoteId && !activeHadLocalChanges) {
 		const refreshedActive = activeNote();
-		if (refreshedActive && editor.value !== currentText(refreshedActive)) {
-			editor.value = currentText(refreshedActive);
+		if (refreshedActive) {
+			const refreshedText = viewingFinal && refreshedActive.finalText
+				? `${refreshedActive.finalText.replace(/\n?$/, '\n')}`
+				: currentText(refreshedActive);
+			if (editor.value !== refreshedText) editor.value = refreshedText;
 		}
 	}
 	const organizerInteractionActive = Boolean(
@@ -689,6 +742,7 @@ async function refreshNotebookFromServer() {
 		else if (notesChanged) renderNotes();
 	}
 	if (activeNote()?.persisted) stateText.textContent = savedStateText();
+	renderVersion();
 	fitEditor();
 	return true;
 }
@@ -725,6 +779,7 @@ async function cleanSubmittedThought(noteId: string, thoughtId: string, rawThoug
 		await store.commitNote({
 			id: note.id,
 			text: note.savedText,
+			finalText: note.finalText,
 			thoughts: note.thoughts,
 			location: note.location
 		});
@@ -762,6 +817,7 @@ else {
 	editor.value = currentText(notes[0]!);
 	stateText.textContent = savedStateText();
 }
+renderVersion();
 renderFolders();
 openMarkdown.hidden = !supportsLocalMarkdownFiles();
 renderLocalFiles();
@@ -819,6 +875,7 @@ function commitEditor() {
 		await store.commitNote({
 			id: note.id,
 			text: note.savedText,
+			finalText: note.finalText,
 			thoughts: note.thoughts,
 			location: note.location
 		});
@@ -839,6 +896,75 @@ editor.addEventListener('keydown', (event) => {
 });
 
 saveThought.addEventListener('click', commitEditor);
+showRawVersion.addEventListener('click', () => showVersion(false));
+showFinalVersion.addEventListener('click', () => showVersion(true));
+
+exportNoteMarkdown.addEventListener('click', () => {
+	downloadNote(editor.value, displayedNoteTitle(), 'md');
+});
+exportNoteText.addEventListener('click', () => {
+	downloadNote(editor.value, displayedNoteTitle(), 'txt');
+});
+
+function closeDistillation() {
+	distillDialog.close();
+	distillNote.focus();
+}
+
+distillNote.addEventListener('click', () => {
+	if (activeLocal) return;
+	const source = editor.value;
+	const sourceTitle = displayedNoteTitle();
+	distilledMarkdown = '';
+	distilledSourceTitle = sourceTitle;
+	distillDialogTitle.textContent = `Distilled ${sourceTitle}`;
+	distillStatus.textContent = 'Distilling note…';
+	distillResult.textContent = '';
+	distillResult.hidden = true;
+	saveDistilledNote.disabled = true;
+	exportDistilledMarkdown.disabled = true;
+	exportDistilledText.disabled = true;
+	distillDialog.showModal();
+	void new LocalAgent().distillNote(source).then((result) => {
+		distilledMarkdown = result;
+		distillStatus.textContent = 'Distillation ready';
+		distillResult.textContent = result;
+		distillResult.hidden = false;
+		saveDistilledNote.disabled = false;
+		exportDistilledMarkdown.disabled = false;
+		exportDistilledText.disabled = false;
+	}).catch((error) => {
+		distillStatus.textContent = error instanceof Error ? error.message : 'The note could not be distilled.';
+	});
+});
+closeDistill.addEventListener('click', closeDistillation);
+saveDistilledNote.addEventListener('click', () => {
+	if (!distilledMarkdown) return;
+	const note = activeNote();
+	if (!note) return;
+	note.finalText = distilledMarkdown;
+	void (async () => {
+		await store.commitNote({
+			id: note.id,
+			text: note.savedText,
+			finalText: note.finalText,
+			thoughts: note.thoughts,
+			location: note.location
+		});
+		serverDurable = await synchronizeNotebook();
+		distillDialog.close();
+		showVersion(true);
+		stateText.textContent = serverDurable
+			? 'Final version saved to server'
+			: 'Final version saved offline — pending sync';
+	})();
+});
+exportDistilledMarkdown.addEventListener('click', () => {
+	if (distilledMarkdown) downloadNote(distilledMarkdown, `${distilledSourceTitle} distilled`, 'md');
+});
+exportDistilledText.addEventListener('click', () => {
+	if (distilledMarkdown) downloadNote(distilledMarkdown, `${distilledSourceTitle} distilled`, 'txt');
+});
 
 editor.addEventListener('input', () => {
 	if (activeLocal) {

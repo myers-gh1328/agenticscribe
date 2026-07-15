@@ -27,9 +27,11 @@ conversion of controller behavior into reactive Svelte components must proceed
 in test-first vertical slices without maintaining a second state or persistence
 implementation.
 
-The visible toolbar is intentionally limited to headings, emphasis, lists,
-links, code blocks, quotes, and horizontal rules. Image, table, math, AI, and
-collaboration features remain disabled and outside the core note-taking boundary.
+The visible editor toolbar is intentionally limited to headings, emphasis, lists,
+links, code blocks, quotes, and horizontal rules. Distillation remains an explicit
+modal action outside the editor adapter. Accepting its result attaches a read-only
+Final version to the same note while preserving the editable Raw version. Image, table, math, and collaboration features
+remain disabled and outside the core note-taking boundary.
 
 ## Build And Offline Contract
 

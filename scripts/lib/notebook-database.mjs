@@ -67,6 +67,10 @@ export function openNotebookDatabase({ path, now = () => new Date().toISOString(
 			PRIMARY KEY (owner_id, mutation_id)
 		) STRICT;
 	`);
+	if (!sqlite.prepare('PRAGMA table_info(notes)').all().some((column) => column.name === 'final_text')) {
+		sqlite.exec('ALTER TABLE notes ADD COLUMN final_text TEXT');
+	}
+	sqlite.prepare("UPDATE metadata SET value = '2' WHERE key = 'schema_version'").run();
 
 	const statements = {
 		receipt: sqlite.prepare(
@@ -88,10 +92,11 @@ export function openNotebookDatabase({ path, now = () => new Date().toISOString(
 				deleted_at = NULL
 		`),
 		putNote: sqlite.prepare(`
-			INSERT INTO notes(owner_id, id, text, thoughts_json, location, server_version, created_at, updated_at, deleted_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
+			INSERT INTO notes(owner_id, id, text, final_text, thoughts_json, location, server_version, created_at, updated_at, deleted_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
 			ON CONFLICT(owner_id, id) DO UPDATE SET
 				text = excluded.text,
+				final_text = excluded.final_text,
 				thoughts_json = excluded.thoughts_json,
 				location = excluded.location,
 				server_version = excluded.server_version,
@@ -106,7 +111,7 @@ export function openNotebookDatabase({ path, now = () => new Date().toISOString(
 			'SELECT id, name, parent_id, server_version, created_at, updated_at FROM folders WHERE owner_id = ? AND deleted_at IS NULL ORDER BY id'
 		),
 		activeNotes: sqlite.prepare(
-			'SELECT id, text, thoughts_json, location, server_version, created_at, updated_at FROM notes WHERE owner_id = ? AND deleted_at IS NULL ORDER BY id'
+			'SELECT id, text, final_text, thoughts_json, location, server_version, created_at, updated_at FROM notes WHERE owner_id = ? AND deleted_at IS NULL ORDER BY id'
 		)
 	};
 
@@ -183,6 +188,7 @@ export function openNotebookDatabase({ path, now = () => new Date().toISOString(
 			ownerId,
 			mutation.entityId,
 			mutation.note.text,
+			mutation.note.finalText ?? null,
 			JSON.stringify(mutation.note.thoughts),
 			mutation.note.location,
 			version,
@@ -207,7 +213,7 @@ export function openNotebookDatabase({ path, now = () => new Date().toISOString(
 		snapshot(ownerId = 'local-owner') {
 			validateOwnerId(ownerId);
 			return {
-				schemaVersion: 1,
+				schemaVersion: 2,
 				folders: statements.activeFolders.all(ownerId).map(mapFolder),
 				notes: statements.activeNotes.all(ownerId).map(mapNote)
 			};
@@ -284,6 +290,7 @@ function validateNote(note, entityId) {
 		note?.id !== entityId ||
 		typeof note.text !== 'string' ||
 		Buffer.byteLength(note.text, 'utf8') > MAX_NOTE_BYTES ||
+		(note.finalText !== undefined && (typeof note.finalText !== 'string' || Buffer.byteLength(note.finalText, 'utf8') > MAX_NOTE_BYTES)) ||
 		!Array.isArray(note.thoughts) ||
 		typeof note.location !== 'string' ||
 		!note.location
@@ -341,6 +348,7 @@ function mapNote(row) {
 	return {
 		id: row.id,
 		text: row.text,
+		finalText: row.final_text ?? undefined,
 		thoughts: JSON.parse(row.thoughts_json),
 		location: row.location,
 		serverVersion: row.server_version,

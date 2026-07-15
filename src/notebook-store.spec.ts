@@ -67,6 +67,7 @@ describe('NotebookStore', () => {
 					notes: [{
 						id: 'note-remote',
 						text: 'Remote thought\n',
+						finalText: '# Final\n\nRemote summary.',
 						thoughts: [{ id: 'thought-remote', end: 15 }],
 						location: 'work',
 						serverVersion: 7,
@@ -83,7 +84,10 @@ describe('NotebookStore', () => {
 		expect(await store.listFolders()).toEqual([
 			expect.objectContaining({ id: 'work', name: 'Work', parentId: null })
 		]);
-		expect(await store.loadNote('note-remote')).toMatchObject({ text: 'Remote thought\n' });
+		expect(await store.loadNote('note-remote')).toMatchObject({
+			text: 'Remote thought\n',
+			finalText: '# Final\n\nRemote summary.'
+		});
 		expect(await store.syncState('note', 'note-remote')).toMatchObject({
 			serverVersion: 7,
 			status: 'clean'

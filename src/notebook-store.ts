@@ -13,6 +13,7 @@ export interface ThoughtBoundary {
 export interface CommittedNote {
 	id: string;
 	text: string;
+	finalText?: string;
 	thoughts: ThoughtBoundary[];
 	location: string;
 }
@@ -366,7 +367,7 @@ export class NotebookStore {
 				type: 'put-note',
 				entityId: id,
 				expectedVersion: 0,
-				note: { id, text: moved.text, thoughts: moved.thoughts, location: moved.location }
+				note: { id, text: moved.text, finalText: moved.finalText, thoughts: moved.thoughts, location: moved.location }
 			});
 			return structuredClone(moved);
 		});
@@ -554,6 +555,7 @@ export class NotebookStore {
 					await this.#database.notes.put({
 						id: note.id,
 						text: note.text,
+						finalText: note.finalText,
 						thoughts: note.thoughts,
 						location: note.location,
 						revision: previous?.revision ?? note.serverVersion,
@@ -591,7 +593,7 @@ export class NotebookStore {
 							type: 'put-note',
 							entityId: note.id,
 							expectedVersion: 0,
-							note: { id: note.id, text: note.text, thoughts: note.thoughts, location: note.location }
+							note: { id: note.id, text: note.text, finalText: note.finalText, thoughts: note.thoughts, location: note.location }
 						});
 					}
 				}

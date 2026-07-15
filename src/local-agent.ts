@@ -18,6 +18,10 @@ interface CleanupResponse {
 	cleanedThought?: string;
 }
 
+interface DistillationResponse {
+	distilledNote?: string;
+}
+
 const PREFERENCES_KEY = 'agenticscribe.agent-preferences';
 const LEGACY_SETTINGS_KEY = 'agenticscribe.local-agent';
 
@@ -86,5 +90,24 @@ export class LocalAgent {
 		const cleaned = result.cleanedThought?.trim();
 		if (!cleaned) throw new Error('The deployment-managed agent returned an empty thought.');
 		return cleaned;
+	}
+
+	async distillNote(note: string) {
+		const response = await this.#fetch('/api/agent/distill', {
+			method: 'POST',
+			headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+			body: JSON.stringify({ note }),
+			signal: AbortSignal.timeout(35_000)
+		});
+		if (!response.ok) {
+			if (response.status === 413) throw new Error('This note is too large to distill.');
+			if (response.status === 503) throw new Error('The deployment-managed agent is busy or unavailable.');
+			if (response.status === 504) throw new Error('The deployment-managed agent took too long to respond.');
+			throw new Error('The deployment-managed agent could not distill this note.');
+		}
+		const result = (await response.json()) as DistillationResponse;
+		const distilled = result.distilledNote?.trim();
+		if (!distilled) throw new Error('The deployment-managed agent returned an empty distillation.');
+		return distilled;
 	}
 }

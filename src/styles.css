@@ -583,6 +583,144 @@ button {
 	background: #7f382b;
 }
 
+.distill-dialog {
+	width: min(calc(100% - 36px), 820px);
+	max-height: min(88vh, 880px);
+	border: 1px solid color-mix(in srgb, var(--muted) 28%, transparent);
+	border-radius: 14px;
+	background: var(--paper);
+	padding: 0;
+	color: var(--ink);
+	box-shadow: 0 30px 100px rgba(18, 20, 18, 0.42);
+}
+
+.distill-dialog::backdrop {
+	background: rgba(18, 20, 18, 0.68);
+	backdrop-filter: blur(4px);
+}
+
+.distill-sheet {
+	display: flex;
+	max-height: min(88vh, 880px);
+	flex-direction: column;
+	padding: clamp(24px, 5vw, 46px);
+}
+
+.distill-sheet > header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 20px;
+}
+
+.distill-eyebrow {
+	margin: 0 0 7px;
+	color: #8f3e31;
+	font: 700 10px/1 ui-monospace, 'Cascadia Mono', monospace;
+	letter-spacing: 0.13em;
+	text-transform: uppercase;
+}
+
+:root[data-theme='dark'] .distill-eyebrow {
+	color: #e18f78;
+}
+
+.distill-sheet h2 {
+	margin: 0;
+	font-size: clamp(28px, 5vw, 42px);
+	font-weight: normal;
+	letter-spacing: -0.03em;
+}
+
+.distill-close {
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	padding: 2px 10px 6px;
+	color: var(--muted);
+	font-size: 28px;
+	cursor: pointer;
+}
+
+.distill-close:hover,
+.distill-close:focus-visible {
+	background: color-mix(in srgb, var(--muted) 12%, transparent);
+	color: var(--ink);
+	outline: 2px solid color-mix(in srgb, var(--muted) 50%, transparent);
+}
+
+.distill-disclosure {
+	margin: 20px 0 0;
+	border-left: 3px solid #b46f5d;
+	padding: 8px 12px;
+	color: var(--muted);
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+.distill-status {
+	margin: 22px 0;
+	color: var(--muted);
+	font: 12px/1.4 ui-monospace, 'Cascadia Mono', monospace;
+}
+
+.distill-result {
+	min-height: 180px;
+	margin: 0;
+	overflow: auto;
+	border-top: 1px solid var(--rule);
+	border-bottom: 1px solid var(--rule);
+	padding: 24px 2px;
+	color: var(--ink);
+	font: 17px/1.65 Georgia, 'Times New Roman', serif;
+	white-space: pre-wrap;
+}
+
+.distill-result[hidden] {
+	display: none;
+}
+
+.distill-sheet > footer {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 24px;
+}
+
+.distill-sheet > footer button {
+	min-height: 42px;
+	border: 1px solid color-mix(in srgb, var(--muted) 34%, transparent);
+	border-radius: 7px;
+	background: transparent;
+	padding: 0 13px;
+	color: var(--ink);
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.distill-sheet > footer .distill-primary {
+	border-color: #356b52;
+	background: #356b52;
+	color: #fffaf2;
+}
+
+:root[data-theme='dark'] .distill-sheet > footer .distill-primary {
+	border-color: #87cda3;
+	background: #87cda3;
+	color: #152019;
+}
+
+.distill-sheet > footer button:focus-visible {
+	outline: 2px solid #8a6d3b;
+	outline-offset: 2px;
+}
+
+.distill-sheet > footer button:disabled {
+	opacity: 0.48;
+	cursor: wait;
+}
+
 .empty-location {
 	margin: 7px 10px;
 	color: var(--sidebar-muted);
@@ -677,6 +815,81 @@ body {
 	letter-spacing: -0.025em;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.note-heading-row {
+	display: flex;
+	align-items: end;
+	justify-content: space-between;
+	gap: 24px;
+}
+
+.note-heading-row h2 {
+	min-width: 0;
+}
+
+.note-versions {
+	display: inline-flex;
+	border: 1px solid var(--rule);
+	border-radius: 999px;
+	padding: 3px;
+	background: color-mix(in srgb, var(--paper) 75%, transparent);
+}
+
+.note-versions[hidden] {
+	display: none;
+}
+
+.note-versions button {
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	padding: 6px 11px;
+	color: var(--muted);
+	cursor: pointer;
+}
+
+.note-versions button[aria-pressed='true'] {
+	background: var(--ink);
+	color: var(--paper);
+}
+
+.note-actions {
+	display: flex;
+	flex: 0 0 auto;
+	gap: 6px;
+}
+
+.note-actions button {
+	border: 1px solid color-mix(in srgb, var(--muted) 34%, transparent);
+	border-radius: 7px;
+	background: transparent;
+	padding: 7px 9px;
+	color: var(--muted);
+	font: 600 10px/1 ui-monospace, 'Cascadia Mono', monospace;
+	cursor: pointer;
+}
+
+.note-actions button:first-child {
+	border-color: color-mix(in srgb, #8f3e31 48%, transparent);
+	color: #8f3e31;
+}
+
+:root[data-theme='dark'] .note-actions button:first-child {
+	border-color: color-mix(in srgb, #e18f78 58%, transparent);
+	color: #e18f78;
+}
+
+.note-actions button:hover,
+.note-actions button:focus-visible {
+	border-color: currentColor;
+	background: color-mix(in srgb, currentColor 7%, transparent);
+	outline: 2px solid transparent;
+}
+
+.note-actions button:disabled {
+	opacity: 0.48;
+	cursor: not-allowed;
 }
 
 :root[data-theme='dark'] .note-identity {
@@ -947,6 +1160,20 @@ body {
 		font-size: 27px;
 	}
 
+	.note-heading-row {
+		align-items: stretch;
+		flex-direction: column;
+		gap: 14px;
+	}
+
+	.note-actions {
+		overflow-x: auto;
+	}
+
+	.note-actions button {
+		min-height: 40px;
+	}
+
 	#editor .milkdown .ProseMirror {
 		padding: 34px 24px 96px 52px;
 	}
@@ -973,6 +1200,26 @@ body {
 
 	.shortcut {
 		display: none;
+	}
+
+	.distill-dialog {
+		width: 100%;
+		max-width: none;
+		max-height: 100vh;
+		margin: 0;
+		border: 0;
+		border-radius: 0;
+	}
+
+	.distill-sheet {
+		min-height: 100vh;
+		max-height: 100vh;
+		padding: 24px 20px;
+	}
+
+	.distill-sheet > footer {
+		align-items: stretch;
+		flex-direction: column;
 	}
 }
 
