@@ -612,6 +612,77 @@ function synchronizeNotebook() {
 	return attempt;
 }
 
+async function refreshNotebookFromServer() {
+	const activeBeforeRefresh = activeNote();
+	const activeHadLocalChanges = activeBeforeRefresh
+		? drafts.get(activeBeforeRefresh.id) !== activeBeforeRefresh.savedText
+		: false;
+	const synchronized = await synchronizeNotebook();
+	serverDurable = synchronized;
+	if (!synchronized) return false;
+
+	const [storedNotes, storedFolders] = await Promise.all([store.listNotes(), store.listFolders()]);
+	const previousNotes = new Map(notes.map((note) => [note.id, note]));
+	const refreshedNotes = storedNotes.map((stored) => {
+		const previous = previousNotes.get(stored.id);
+		const hasLocalChanges = previous
+			? drafts.get(stored.id) !== previous.savedText
+			: false;
+		if (!hasLocalChanges) drafts.set(stored.id, stored.text);
+		return {
+			id: stored.id,
+			savedText: stored.text,
+			thoughts: stored.thoughts,
+			location: stored.location,
+			persisted: true
+		};
+	});
+	for (const note of notes) {
+		if (!note.persisted && !refreshedNotes.some((candidate) => candidate.id === note.id)) {
+			refreshedNotes.push(note);
+		}
+	}
+	const notesChanged = notes.length !== refreshedNotes.length || notes.some((note, index) => {
+		const refreshed = refreshedNotes[index];
+		return !refreshed
+			|| note.id !== refreshed.id
+			|| note.savedText !== refreshed.savedText
+			|| note.location !== refreshed.location
+			|| note.persisted !== refreshed.persisted
+			|| JSON.stringify(note.thoughts) !== JSON.stringify(refreshed.thoughts);
+	});
+	const foldersChanged = folders.length !== storedFolders.length || folders.some((folder, index) => {
+		const refreshed = storedFolders[index];
+		return !refreshed
+			|| folder.id !== refreshed.id
+			|| folder.name !== refreshed.name
+			|| folder.parentId !== refreshed.parentId;
+	});
+	notes = refreshedNotes;
+	folders = storedFolders;
+
+	if (!activeLocal && activeNoteId && !activeHadLocalChanges) {
+		const refreshedActive = activeNote();
+		if (refreshedActive && editor.value !== currentText(refreshedActive)) {
+			editor.value = currentText(refreshedActive);
+		}
+	}
+	const organizerInteractionActive = Boolean(
+		document.querySelector('.move-menu:not([hidden]), .folder-form')
+	);
+	if (!organizerInteractionActive) {
+		if (foldersChanged) renderFolders();
+		else if (notesChanged) renderNotes();
+	}
+	if (activeNote()?.persisted) stateText.textContent = savedStateText();
+	fitEditor();
+	return true;
+}
+
+function requestRemoteRefresh() {
+	void refreshNotebookFromServer();
+}
+
 function showCleaning() {
 	clearTimeout(stateTimer);
 	state.classList.remove('saved');
@@ -801,12 +872,12 @@ document.addEventListener('keydown', (event) => {
 	if (event.key === 'Escape') closeMoveMenus();
 });
 window.addEventListener('resize', fitEditor);
-window.addEventListener('online', () => {
-	void synchronizeNotebook().then((synchronized) => {
-		serverDurable = synchronized;
-		if (activeNote()?.persisted) stateText.textContent = savedStateText();
-	});
+window.addEventListener('online', requestRemoteRefresh);
+window.addEventListener('focus', () => window.setTimeout(requestRemoteRefresh, 0));
+document.addEventListener('visibilitychange', () => {
+	if (document.visibilityState === 'visible') requestRemoteRefresh();
 });
+window.setInterval(requestRemoteRefresh, 30_000);
 editor.disabled = false;
 document.documentElement.dataset.notebookReady = 'true';
 fitEditor();

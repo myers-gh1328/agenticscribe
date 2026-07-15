@@ -195,6 +195,45 @@ test('an offline commit syncs after reconnect and survives a new browser profile
 	}
 });
 
+test('an already-open device refreshes notes when it regains focus', async ({ browser, page }, testInfo) => {
+	const owner = testOwner(testInfo);
+	const otherDevice = await browser.newContext({ extraHTTPHeaders: tailscaleHeaders(owner) });
+	try {
+		const otherPage = await otherDevice.newPage();
+		await otherPage.goto('http://127.0.0.1:4173/');
+		await expect(otherPage.locator('html')).toHaveAttribute('data-notebook-ready', 'true');
+		const otherEditor = otherPage.getByRole('textbox', { name: 'Continuous note' });
+		await otherEditor.click();
+		await otherEditor.pressSequentially('Unfinished on the second device');
+
+		await saveThought(page, 'Written on the first device');
+		await otherPage.bringToFront();
+		await otherPage.evaluate(() => window.dispatchEvent(new Event('focus')));
+
+		await openOrganizer(otherPage);
+		await expect(otherPage.getByRole('button', { name: 'Written on the first device', exact: true })).toBeVisible();
+		await expectEditorMarkdown(otherPage, 'Unfinished on the second device\n');
+	} finally {
+		await otherDevice.close();
+	}
+});
+
+test('an open device periodically checks for remote notebook changes', async ({ page }) => {
+	await page.clock.install();
+	let snapshotRequests = 0;
+	await page.route('**/api/notebook/snapshot', async (route) => {
+		snapshotRequests += 1;
+		await route.continue();
+	});
+	await page.reload();
+	await expect(page.locator('html')).toHaveAttribute('data-notebook-ready', 'true');
+	const requestsAfterStartup = snapshotRequests;
+
+	await page.clock.fastForward(30_000);
+
+	await expect.poll(() => snapshotRequests).toBeGreaterThan(requestsAfterStartup);
+});
+
 test('deployment-managed agent setup is reachable without browser-owned connection fields', async ({
 	page
 }) => {
@@ -411,8 +450,16 @@ test('nested folders can be renamed and a note can be moved into them', async ({
 	await page.getByRole('button', { name: 'New folder inside Work' }).click();
 	await page.getByRole('textbox', { name: 'Folder name' }).fill('Clients');
 	await page.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Rename Clients' })).toBeVisible();
 
+	let refreshSnapshots = 0;
+	await page.route('**/api/notebook/snapshot', async (route) => {
+		refreshSnapshots += 1;
+		await route.continue();
+	});
 	await page.getByRole('button', { name: 'Actions for Move this note' }).click();
+	await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+	await expect.poll(() => refreshSnapshots).toBeGreaterThanOrEqual(2);
 	await page.getByRole('menuitem', { name: 'Clients', exact: true }).click();
 	await expect(page.getByRole('heading', { name: 'CLIENTS NOTES' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Move this note', exact: true })).toBeVisible();
