@@ -65,6 +65,10 @@
 
 	<div class="workspace">
 		<main class="note" aria-label="Note">
+			<header class="note-identity">
+				<span>Current note</span>
+				<h2 id="note-title-display">Untitled note</h2>
+			</header>
 			<div id="editor" aria-label="Continuous note editor"></div>
 		</main>
 		<div class="capture-state" id="capture-state" role="status" aria-live="polite">

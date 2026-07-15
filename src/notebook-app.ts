@@ -33,7 +33,8 @@ export async function initializeNotebookApp() {
 	if (initialized) return;
 	initialized = true;
 
-const editor = await MarkdownEditor.create(requireElement<HTMLElement>('#editor'));
+const editorRoot = requireElement<HTMLElement>('#editor');
+const editor = await MarkdownEditor.create(editorRoot);
 const state = requireElement<HTMLElement>('#capture-state');
 const stateText = requireElement<HTMLElement>('#state-text');
 const saveThought = requireElement<HTMLButtonElement>('#save-thought');
@@ -45,6 +46,7 @@ const sidebarToggle = requireElement<HTMLButtonElement>('#sidebar-toggle');
 const notesList = requireElement<HTMLElement>('#notes-list');
 const emptyLocation = requireElement<HTMLElement>('#empty-location');
 const locationName = requireElement<HTMLElement>('#location-name');
+const noteTitleDisplay = requireElement<HTMLElement>('#note-title-display');
 const scratchpadCount = requireElement<HTMLElement>('#scratchpad-count');
 const folderList = requireElement<HTMLElement>('#folder-list');
 const addRootFolder = requireElement<HTMLButtonElement>('#add-root-folder');
@@ -107,6 +109,16 @@ function currentText(note: NotebookNote) {
 
 function noteTitle(note: NotebookNote) {
 	return currentText(note).split('\n').map((line) => line.trim()).find(Boolean) || 'Untitled note';
+}
+
+function displayedNoteTitle() {
+	if (activeLocal) return activeLocal.binding.name.replace(/\.md$/i, '') || 'Untitled note';
+	const note = activeNote();
+	return note ? noteTitle(note).replace(/^#{1,6}\s+/, '') : 'Untitled note';
+}
+
+function renderNoteTitle() {
+	noteTitleDisplay.textContent = displayedNoteTitle();
 }
 
 function localRecovery(binding: LocalMarkdownBinding) {
@@ -403,6 +415,7 @@ function createMoveMenu(note: NotebookNote, button: HTMLButtonElement) {
 }
 
 function renderNotes() {
+	renderNoteTitle();
 	notesList.replaceChildren();
 	const visibleNotes = notes.filter((note) => note.location === selectedLocation);
 	for (const note of visibleNotes) {
@@ -614,8 +627,9 @@ function synchronizeNotebook() {
 
 async function refreshNotebookFromServer() {
 	const activeBeforeRefresh = activeNote();
+	const editorHasFocus = Boolean(document.activeElement && editorRoot.contains(document.activeElement));
 	const activeHadLocalChanges = activeBeforeRefresh
-		? drafts.get(activeBeforeRefresh.id) !== activeBeforeRefresh.savedText
+		? editorHasFocus || drafts.get(activeBeforeRefresh.id) !== activeBeforeRefresh.savedText
 		: false;
 	const synchronized = await synchronizeNotebook();
 	serverDurable = synchronized;
@@ -626,7 +640,7 @@ async function refreshNotebookFromServer() {
 	const refreshedNotes = storedNotes.map((stored) => {
 		const previous = previousNotes.get(stored.id);
 		const hasLocalChanges = previous
-			? drafts.get(stored.id) !== previous.savedText
+			? (stored.id === activeNoteId && editorHasFocus) || drafts.get(stored.id) !== previous.savedText
 			: false;
 		if (!hasLocalChanges) drafts.set(stored.id, stored.text);
 		return {
@@ -830,6 +844,7 @@ editor.addEventListener('input', () => {
 	if (activeLocal) {
 		activeLocal.binding.recoveryText = editor.value;
 		void localMarkdownStore.saveRecovery(activeLocal.binding.id, editor.value);
+		renderNoteTitle();
 		renderLocalFiles();
 		fitEditor();
 		return;
@@ -873,7 +888,15 @@ document.addEventListener('keydown', (event) => {
 });
 window.addEventListener('resize', fitEditor);
 window.addEventListener('online', requestRemoteRefresh);
-window.addEventListener('focus', () => window.setTimeout(requestRemoteRefresh, 0));
+let refreshAfterWindowFocus = false;
+window.addEventListener('blur', () => {
+	refreshAfterWindowFocus = true;
+});
+window.addEventListener('focus', () => {
+	if (!refreshAfterWindowFocus) return;
+	refreshAfterWindowFocus = false;
+	window.setTimeout(requestRemoteRefresh, 0);
+});
 document.addEventListener('visibilitychange', () => {
 	if (document.visibilityState === 'visible') requestRemoteRefresh();
 });

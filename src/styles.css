@@ -563,6 +563,33 @@ body {
 	background: transparent;
 }
 
+.note-identity {
+	position: relative;
+	z-index: 2;
+	padding: 30px 70px 20px 96px;
+	border-bottom: 1px solid rgba(72, 62, 48, 0.13);
+	background: linear-gradient(180deg, rgba(251, 248, 240, 0.96), rgba(251, 248, 240, 0.82));
+}
+
+.note-identity span {
+	display: block;
+	margin-bottom: 7px;
+	color: #8f3e31;
+	font: 700 10px/1 ui-monospace, 'Cascadia Mono', monospace;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+}
+
+.note-identity h2 {
+	margin: 0;
+	overflow: hidden;
+	color: var(--ink);
+	font: 500 clamp(26px, 4vw, 38px)/1.08 Georgia, 'Times New Roman', serif;
+	letter-spacing: -0.025em;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 #editor .milkdown {
 	width: 100%;
 	min-width: 0;
@@ -782,6 +809,14 @@ body {
 
 	#editor .milkdown .milkdown-top-bar {
 		padding: 4px 166px 4px 42px;
+	}
+
+	.note-identity {
+		padding: 22px 24px 16px 52px;
+	}
+
+	.note-identity h2 {
+		font-size: 27px;
 	}
 
 	#editor .milkdown .ProseMirror {

@@ -48,6 +48,7 @@ async function replaceEditorText(editor: Locator, text: string) {
 test.beforeEach(async ({ page }, testInfo) => {
 	await page.setExtraHTTPHeaders(tailscaleHeaders(testOwner(testInfo)));
 	await page.goto('/');
+	await expect(page.locator('html')).toHaveAttribute('data-notebook-ready', 'true');
 });
 
 test('the notebook exposes discoverable Markdown formatting controls', async ({ page }) => {
@@ -56,6 +57,16 @@ test('the notebook exposes discoverable Markdown formatting controls', async ({ 
 	await expect(page.getByRole('button', { name: 'Bullet list' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Link' })).toBeVisible();
 	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toBeEditable();
+});
+
+test('the note screen gives the active note title a distinct heading', async ({ page }) => {
+	await expect(page.getByRole('heading', { level: 2, name: 'Untitled note' })).toBeVisible();
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await editor.click();
+	await editor.pressSequentially('# ');
+	await editor.pressSequentially('Quarterly planning');
+
+	await expect(page.getByRole('heading', { level: 2, name: 'Quarterly planning' })).toBeVisible();
 });
 
 test('Enter creates a new block and explicit save commits the Markdown document', async ({ page }) => {
@@ -83,13 +94,13 @@ test('Markdown shortcuts render as formatted content while typing', async ({ pag
 test('raw Markdown mode round-trips source edits back into the visual editor', async ({ page }) => {
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
 	await editor.click();
-	await editor.pressSequentially('# ');
 	await editor.pressSequentially('Visual heading');
+	await expectEditorMarkdown(page, 'Visual heading\n');
 
 	await page.getByRole('button', { name: 'Markdown' }).click();
 	const source = page.getByRole('textbox', { name: 'Raw Markdown' });
 	await expect(source).toBeVisible();
-	await expect(source).toHaveValue('# Visual heading\n');
+	await expect(source).toHaveValue('Visual heading\n');
 	await source.fill('## Edited in Markdown\n\n**Still portable.**\n');
 
 	await page.getByRole('button', { name: 'Visual' }).click();
@@ -207,6 +218,7 @@ test('an already-open device refreshes notes when it regains focus', async ({ br
 		await otherEditor.pressSequentially('Unfinished on the second device');
 
 		await saveThought(page, 'Written on the first device');
+		await otherPage.evaluate(() => window.dispatchEvent(new Event('blur')));
 		await otherPage.bringToFront();
 		await otherPage.evaluate(() => window.dispatchEvent(new Event('focus')));
 
@@ -458,6 +470,7 @@ test('nested folders can be renamed and a note can be moved into them', async ({
 		await route.continue();
 	});
 	await page.getByRole('button', { name: 'Actions for Move this note' }).click();
+	await page.evaluate(() => window.dispatchEvent(new Event('blur')));
 	await page.evaluate(() => window.dispatchEvent(new Event('focus')));
 	await expect.poll(() => refreshSnapshots).toBeGreaterThanOrEqual(2);
 	await page.getByRole('menuitem', { name: 'Clients', exact: true }).click();
