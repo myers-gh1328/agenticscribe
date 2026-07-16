@@ -92,11 +92,11 @@ export class LocalAgent {
 		return cleaned;
 	}
 
-	async distillNote(note: string) {
+	async distillNote(note: string, includeSummary = false) {
 		const response = await this.#fetch('/api/agent/distill', {
 			method: 'POST',
 			headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-			body: JSON.stringify({ note }),
+			body: JSON.stringify({ note, includeSummary }),
 			signal: AbortSignal.timeout(35_000)
 		});
 		if (!response.ok) {

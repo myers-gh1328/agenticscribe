@@ -70,13 +70,13 @@ describe('LocalAgent', () => {
 			Response.json({ distilledNote: '# Summary\n\nA concise result.' })
 		);
 
-		await expect(new LocalAgent(request).distillNote('# Raw note')).resolves.toBe(
+		await expect(new LocalAgent(request).distillNote('# Raw note', false)).resolves.toBe(
 			'# Summary\n\nA concise result.'
 		);
 		expect(request).toHaveBeenCalledWith('/api/agent/distill', {
 			method: 'POST',
 			headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-			body: JSON.stringify({ note: '# Raw note' }),
+			body: JSON.stringify({ note: '# Raw note', includeSummary: false }),
 			signal: expect.any(AbortSignal)
 		});
 	});

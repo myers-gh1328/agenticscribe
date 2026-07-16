@@ -68,6 +68,8 @@ const distillDialogTitle = requireElement<HTMLElement>('#distill-dialog-title');
 const distillStatus = requireElement<HTMLElement>('#distill-status');
 const distillResult = requireElement<HTMLElement>('#distill-result');
 const closeDistill = requireElement<HTMLButtonElement>('#close-distill');
+const includeDistillSummary = requireElement<HTMLInputElement>('#include-distill-summary');
+const runDistillation = requireElement<HTMLButtonElement>('#run-distillation');
 const saveDistilledNote = requireElement<HTMLButtonElement>('#save-distilled-note');
 const exportDistilledMarkdown = requireElement<HTMLButtonElement>('#export-distilled-markdown');
 const exportDistilledText = requireElement<HTMLButtonElement>('#export-distilled-text');
@@ -913,28 +915,42 @@ function closeDistillation() {
 
 distillNote.addEventListener('click', () => {
 	if (activeLocal) return;
-	const source = editor.value;
 	const sourceTitle = displayedNoteTitle();
 	distilledMarkdown = '';
 	distilledSourceTitle = sourceTitle;
 	distillDialogTitle.textContent = `Distilled ${sourceTitle}`;
-	distillStatus.textContent = 'Distilling note…';
+	distillStatus.textContent = 'Choose your options, then organize the note.';
 	distillResult.textContent = '';
 	distillResult.hidden = true;
+	includeDistillSummary.checked = false;
+	includeDistillSummary.disabled = false;
+	runDistillation.hidden = false;
+	runDistillation.disabled = false;
+	saveDistilledNote.hidden = true;
 	saveDistilledNote.disabled = true;
 	exportDistilledMarkdown.disabled = true;
 	exportDistilledText.disabled = true;
 	distillDialog.showModal();
-	void new LocalAgent().distillNote(source).then((result) => {
+});
+runDistillation.addEventListener('click', () => {
+	const source = editor.value;
+	includeDistillSummary.disabled = true;
+	runDistillation.disabled = true;
+	distillStatus.textContent = 'Organizing note…';
+	void new LocalAgent().distillNote(source, includeDistillSummary.checked).then((result) => {
 		distilledMarkdown = result;
 		distillStatus.textContent = 'Distillation ready';
 		distillResult.textContent = result;
 		distillResult.hidden = false;
+		runDistillation.hidden = true;
+		saveDistilledNote.hidden = false;
 		saveDistilledNote.disabled = false;
 		exportDistilledMarkdown.disabled = false;
 		exportDistilledText.disabled = false;
 	}).catch((error) => {
 		distillStatus.textContent = error instanceof Error ? error.message : 'The note could not be distilled.';
+		includeDistillSummary.disabled = false;
+		runDistillation.disabled = false;
 	});
 });
 closeDistill.addEventListener('click', closeDistillation);

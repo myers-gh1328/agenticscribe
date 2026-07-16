@@ -285,7 +285,7 @@ test('a distillation is saved as the final version of its raw note and survives 
 	const source = 'Project update\n\nDecision: ship the modal';
 	const distilled = '# Summary\n\nThe project is ready.\n\n## Action items\n\n- Ship the modal';
 	await page.route('**/api/agent/distill', async (route) => {
-		expect(route.request().postDataJSON()).toEqual({ note: `${source}\n` });
+		expect(route.request().postDataJSON()).toEqual({ note: `${source}\n`, includeSummary: false });
 		await route.fulfill({ json: { distilledNote: distilled } });
 	});
 	await page.getByRole('button', { name: 'Markdown', exact: true }).click();
@@ -303,6 +303,8 @@ test('a distillation is saved as the final version of its raw note and survives 
 	const dialog = page.getByRole('dialog', { name: 'Distilled Project update' });
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByText('The entire current note is sent to your deployment-managed agent.')).toBeVisible();
+	await expect(dialog.getByRole('checkbox', { name: 'Include summary' })).not.toBeChecked();
+	await dialog.getByRole('button', { name: 'Organize note' }).click();
 	await expect(dialog.getByText('The project is ready.')).toBeVisible();
 	await expectEditorMarkdown(page, `${source}\n`);
 

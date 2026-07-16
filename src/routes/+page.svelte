@@ -172,10 +172,12 @@
 			<button id="close-distill" class="distill-close" type="button" aria-label="Close distillation">×</button>
 		</header>
 		<p class="distill-disclosure">The entire current note is sent to your deployment-managed agent.</p>
-		<p id="distill-status" class="distill-status" role="status" aria-live="polite">Distilling note…</p>
+		<label class="distill-option"><input id="include-distill-summary" type="checkbox" /> Include summary</label>
+		<p id="distill-status" class="distill-status" role="status" aria-live="polite">Choose your options, then organize the note.</p>
 		<pre id="distill-result" class="distill-result" hidden></pre>
 		<footer>
-			<button id="save-distilled-note" class="distill-primary" type="button" disabled>Use as final version</button>
+			<button id="run-distillation" class="distill-primary" type="button">Organize note</button>
+			<button id="save-distilled-note" class="distill-primary" type="button" hidden disabled>Use as final version</button>
 			<button id="export-distilled-markdown" type="button" disabled>Export distilled Markdown</button>
 			<button id="export-distilled-text" type="button" disabled>Export distilled text</button>
 		</footer>

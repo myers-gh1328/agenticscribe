@@ -30,7 +30,9 @@ implementation.
 The visible editor toolbar is intentionally limited to headings, emphasis, lists,
 links, code blocks, quotes, and horizontal rules. Distillation remains an explicit
 modal action outside the editor adapter. Accepting its result attaches a read-only
-Final version to the same note while preserving the editable Raw version. Image, table, math, and collaboration features
+Final version to the same note while preserving the editable Raw version. The
+modal makes summary inclusion an explicit, default-off choice before it sends
+the note. Image, table, math, and collaboration features
 remain disabled and outside the core note-taking boundary.
 
 ## Build And Offline Contract

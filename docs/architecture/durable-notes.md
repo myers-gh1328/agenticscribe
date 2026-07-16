@@ -75,7 +75,7 @@ cleanup and distillation prompts, timeouts, and upstream request shape. Deployme
 verified Tailscale identity and capability headers or disable that gate on a
 trusted private LAN. Cleanup and distillation always require the canonical Origin,
 same-origin Fetch Metadata, and bounded JSON. Distillation accepts exactly one
-nonblank current-note string, shares the bounded concurrency and response limits,
+nonblank current-note string and one boolean summary choice, shares the bounded concurrency and response limits,
 does not retry automatically, and returns untrusted Markdown as text. The API is not a generic completion proxy and
 never accepts a caller-selected endpoint, model, prompt, or messages array.
 An accepted result is persisted as the note's optional `finalText` alongside its

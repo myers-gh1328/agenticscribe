@@ -94,7 +94,9 @@ automatic cleanup is enabled, only the newly submitted thought is sent to the
 deployment-managed endpoint; the original is retained with the note.
 Distillation is separate and never automatic: clicking Distill note sends a
 snapshot of the entire visible synchronized Raw version. The result remains a
-review-only preview until the user accepts it as that note's Final version. Raw
+review-only preview until the user accepts it as that note's Final version. The
+user explicitly chooses whether the organized result includes a summary; the
+choice defaults off. Raw
 is never replaced; accepted Final content is stored and synchronized with the
 same note.
 
