@@ -20,6 +20,7 @@ import { LocalMarkdownStore, type LocalMarkdownBinding } from './local-markdown-
 import { MarkdownEditor } from './markdown-editor';
 import { LocalAgent } from './local-agent';
 import { downloadNote } from './note-export';
+import { VoiceRecorder } from './voice-recorder';
 
 interface NotebookNote {
 	id: string;
@@ -54,6 +55,7 @@ const noteVersions = requireElement<HTMLElement>('#note-versions');
 const showRawVersion = requireElement<HTMLButtonElement>('#show-raw-version');
 const showFinalVersion = requireElement<HTMLButtonElement>('#show-final-version');
 const distillNote = requireElement<HTMLButtonElement>('#distill-note');
+const voiceNote = requireElement<HTMLButtonElement>('#voice-note');
 const exportNoteMarkdown = requireElement<HTMLButtonElement>('#export-note-markdown');
 const exportNoteText = requireElement<HTMLButtonElement>('#export-note-text');
 const scratchpadCount = requireElement<HTMLElement>('#scratchpad-count');
@@ -73,6 +75,12 @@ const runDistillation = requireElement<HTMLButtonElement>('#run-distillation');
 const saveDistilledNote = requireElement<HTMLButtonElement>('#save-distilled-note');
 const exportDistilledMarkdown = requireElement<HTMLButtonElement>('#export-distilled-markdown');
 const exportDistilledText = requireElement<HTMLButtonElement>('#export-distilled-text');
+const voiceDialog = requireElement<HTMLDialogElement>('#voice-dialog');
+const voiceStatus = requireElement<HTMLElement>('#voice-status');
+const closeVoice = requireElement<HTMLButtonElement>('#close-voice');
+const startVoice = requireElement<HTMLButtonElement>('#start-voice');
+const stopVoice = requireElement<HTMLButtonElement>('#stop-voice');
+const transcribeVoice = requireElement<HTMLButtonElement>('#transcribe-voice');
 const workspace = requireElement<HTMLElement>('.workspace');
 const setupPage = requireElement<HTMLElement>('#setup-page');
 await initializeNotebookIdentity();
@@ -117,6 +125,8 @@ let deleteReturnFocus: HTMLElement | undefined;
 let distilledMarkdown = '';
 let distilledSourceTitle = '';
 let viewingFinal = false;
+let voiceRecorder: VoiceRecorder | undefined;
+let voiceSegments: Blob[] = [];
 
 function createId() {
 	return `note-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -144,6 +154,8 @@ function renderNoteTitle() {
 	noteTitleDisplay.textContent = displayedNoteTitle();
 	distillNote.disabled = Boolean(activeLocal);
 	distillNote.title = activeLocal ? 'Local files stay on this device and cannot be sent for distillation.' : '';
+	voiceNote.disabled = Boolean(activeLocal);
+	voiceNote.title = activeLocal ? 'Local files stay on this device and cannot be sent for transcription.' : '';
 }
 
 function renderVersion() {
@@ -799,6 +811,9 @@ async function cleanSubmittedThought(noteId: string, thoughtId: string, rawThoug
 }
 
 const agentSetup = new AgentSetup({
+	onStatus({ connected, voice }) {
+		voiceNote.hidden = !(connected && voice && 'MediaRecorder' in window && navigator.mediaDevices?.getUserMedia);
+	},
 	onOpen() {
 		const note = activeNote();
 		if (note) drafts.set(note.id, editor.value);
@@ -900,6 +915,91 @@ editor.addEventListener('keydown', (event) => {
 saveThought.addEventListener('click', commitEditor);
 showRawVersion.addEventListener('click', () => showVersion(false));
 showFinalVersion.addEventListener('click', () => showVersion(true));
+
+function resetVoiceDialog() {
+	voiceSegments = [];
+	voiceRecorder = undefined;
+	voiceStatus.textContent = 'Ready to record.';
+	startVoice.hidden = false;
+	startVoice.disabled = false;
+	stopVoice.hidden = true;
+	transcribeVoice.hidden = true;
+	transcribeVoice.disabled = false;
+}
+
+voiceNote.addEventListener('click', () => {
+	if (activeLocal) return;
+	resetVoiceDialog();
+	voiceDialog.showModal();
+});
+startVoice.addEventListener('click', () => {
+	startVoice.disabled = true;
+	voiceStatus.textContent = 'Requesting microphone access…';
+	const recorder = new VoiceRecorder();
+	voiceRecorder = recorder;
+	void recorder.start().then(() => {
+		voiceStatus.textContent = 'Recording…';
+		startVoice.hidden = true;
+		stopVoice.hidden = false;
+	}).catch(() => {
+		voiceStatus.textContent = 'Microphone access was not available.';
+		startVoice.disabled = false;
+	});
+});
+stopVoice.addEventListener('click', () => {
+	stopVoice.disabled = true;
+	void voiceRecorder?.stop().then((segments) => {
+		voiceSegments = segments;
+		voiceStatus.textContent = segments.length
+			? 'Recording ready on this device.'
+			: 'No audio was recorded.';
+		stopVoice.hidden = true;
+		stopVoice.disabled = false;
+		transcribeVoice.hidden = segments.length === 0;
+	});
+});
+transcribeVoice.addEventListener('click', () => {
+	const agent = agentSetup.agent;
+	if (!agent || !voiceSegments.length) return;
+	transcribeVoice.disabled = true;
+	voiceStatus.textContent = `Transcribing 1 of ${voiceSegments.length}…`;
+	void (async () => {
+		try {
+			const transcripts: string[] = [];
+			for (const [index, segment] of voiceSegments.entries()) {
+				voiceStatus.textContent = `Transcribing ${index + 1} of ${voiceSegments.length}…`;
+				transcripts.push(await agent.transcribe(segment));
+			}
+			if (viewingFinal) showVersion(false);
+			const note = activeNote();
+			if (!note) return;
+			const transcript = transcripts.join('\n\n');
+			const existing = editor.value.trimEnd();
+			const updated = existing ? `${existing}\n\n${transcript}\n` : `${transcript}\n`;
+			editor.value = updated;
+			drafts.set(note.id, updated);
+			await store.saveDraft(note.id, updated, note.location);
+			voiceSegments = [];
+			voiceRecorder = undefined;
+			voiceDialog.close();
+			state.classList.remove('saved');
+			stateText.textContent = 'Voice transcript ready — review and save';
+			renderNoteTitle();
+			fitEditor();
+		} catch (error) {
+			voiceStatus.textContent = error instanceof Error ? error.message : 'Transcription failed — recording kept on this device.';
+			transcribeVoice.disabled = false;
+		}
+	})();
+});
+closeVoice.addEventListener('click', () => {
+	const recorder = voiceRecorder;
+	voiceRecorder = undefined;
+	void recorder?.stop();
+	voiceSegments = [];
+	voiceDialog.close();
+	voiceNote.focus();
+});
 
 exportNoteMarkdown.addEventListener('click', () => {
 	downloadNote(editor.value, displayedNoteTitle(), 'md');

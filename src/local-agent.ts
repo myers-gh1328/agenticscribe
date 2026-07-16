@@ -11,6 +11,7 @@ interface BrowserStorage {
 interface AgentStatus {
 	configured: boolean;
 	available: boolean;
+	voice?: boolean;
 	model?: string;
 }
 
@@ -20,6 +21,10 @@ interface CleanupResponse {
 
 interface DistillationResponse {
 	distilledNote?: string;
+}
+
+interface TranscriptionResponse {
+	transcript?: string;
 }
 
 const PREFERENCES_KEY = 'agenticscribe.agent-preferences';
@@ -75,7 +80,26 @@ export class LocalAgent {
 		if (!status.configured || !status.available || !status.model) {
 			throw new Error('The deployment-managed agent is unavailable.');
 		}
-		return { model: status.model };
+		return { model: status.model, voice: status.voice === true };
+	}
+
+	async transcribe(audio: Blob) {
+		const response = await this.#fetch('/api/agent/transcribe', {
+			method: 'POST',
+			headers: { Accept: 'application/json', 'Content-Type': audio.type },
+			body: audio,
+			signal: AbortSignal.timeout(180_000)
+		});
+		if (!response.ok) {
+			if (response.status === 413) throw new Error('This voice segment is too large to transcribe.');
+			if (response.status === 503) throw new Error('The deployment-managed agent is busy or unavailable.');
+			if (response.status === 504) throw new Error('The deployment-managed agent took too long to transcribe this segment.');
+			throw new Error('The deployment-managed agent could not transcribe this segment.');
+		}
+		const result = (await response.json()) as TranscriptionResponse;
+		const transcript = result.transcript?.trim();
+		if (!transcript) throw new Error('The deployment-managed agent returned an empty transcript.');
+		return transcript;
 	}
 
 	async cleanThought(thought: string) {

@@ -39,12 +39,27 @@ describe('local agent preferences', () => {
 describe('LocalAgent', () => {
 	it('checks deployment-managed status through the same-origin app API', async () => {
 		const request = vi.fn<typeof fetch>().mockResolvedValue(
-			Response.json({ configured: true, available: true, model: 'deployed-model' })
+			Response.json({ configured: true, available: true, voice: true, model: 'deployed-model' })
 		);
 
-		await expect(new LocalAgent(request).connect()).resolves.toEqual({ model: 'deployed-model' });
+		await expect(new LocalAgent(request).connect()).resolves.toEqual({ model: 'deployed-model', voice: true });
 		expect(request).toHaveBeenCalledWith('/api/agent/status', {
 			headers: { Accept: 'application/json' },
+			signal: expect.any(AbortSignal)
+		});
+	});
+
+	it('uploads one bounded audio segment to the same-origin transcription API', async () => {
+		const request = vi.fn<typeof fetch>().mockResolvedValue(
+			Response.json({ transcript: 'A faithful transcript.' })
+		);
+		const audio = new Blob(['synthetic audio'], { type: 'audio/webm' });
+
+		await expect(new LocalAgent(request).transcribe(audio)).resolves.toBe('A faithful transcript.');
+		expect(request).toHaveBeenCalledWith('/api/agent/transcribe', {
+			method: 'POST',
+			headers: { Accept: 'application/json', 'Content-Type': 'audio/webm' },
+			body: audio,
 			signal: expect.any(AbortSignal)
 		});
 	});

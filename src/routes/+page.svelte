@@ -92,6 +92,7 @@
 						<button id="show-final-version" type="button" aria-pressed="false">Final version</button>
 					</div>
 					<div class="note-actions" aria-label="Note actions">
+						<button id="voice-note" type="button" aria-label="Record voice note" hidden>🎙 Voice</button>
 						<button id="distill-note" type="button">Distill note</button>
 						<button id="export-note-markdown" type="button" aria-label="Export note as Markdown">Export .md</button>
 						<button id="export-note-text" type="button" aria-label="Export note as text">Export .txt</button>
@@ -160,6 +161,25 @@
 			<button class="confirm-delete" id="confirm-delete" type="button">Delete note</button>
 		</div>
 	</div>
+</dialog>
+
+<dialog class="voice-dialog" id="voice-dialog" aria-labelledby="voice-dialog-title">
+	<section class="voice-sheet">
+		<header>
+			<div>
+				<p class="distill-eyebrow">Self-hosted transcription</p>
+				<h2 id="voice-dialog-title">Voice note</h2>
+			</div>
+			<button id="close-voice" class="distill-close" type="button" aria-label="Close voice note">×</button>
+		</header>
+		<p class="distill-disclosure">Audio stays on this device until you choose Transcribe, is sent only to your self-hosted model, and is discarded after transcription.</p>
+		<p id="voice-status" class="voice-status" role="status" aria-live="polite">Ready to record.</p>
+		<footer>
+			<button id="start-voice" class="distill-primary" type="button">Start recording</button>
+			<button id="stop-voice" class="voice-stop" type="button" hidden>Stop recording</button>
+			<button id="transcribe-voice" class="distill-primary" type="button" hidden>Transcribe recording</button>
+		</footer>
+	</section>
 </dialog>
 
 <dialog class="distill-dialog" id="distill-dialog" aria-labelledby="distill-dialog-title">

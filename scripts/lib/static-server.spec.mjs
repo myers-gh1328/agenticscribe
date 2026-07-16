@@ -18,10 +18,12 @@ describe('static server', () => {
 			const chunks = [];
 			for await (const chunk of request) chunks.push(chunk);
 			const body = Buffer.concat(chunks).toString('utf8');
-			upstreamRequests.push({ url: request.url, method: request.method, body });
+			upstreamRequests.push({ url: request.url, method: request.method, body, headers: request.headers });
 			response.setHeader('Content-Type', 'application/json');
 			if (request.url === '/v1/models') {
-				response.end(JSON.stringify({ data: [{ id: 'deployment-model' }] }));
+				response.end(JSON.stringify({ data: [{ id: 'deployment-model', capabilities: ['text', 'audio'] }] }));
+			} else if (request.url === '/v1/audio/transcriptions') {
+				response.end(JSON.stringify({ text: 'Synthetic voice transcript' }));
 			} else {
 				const submitted = JSON.parse(body).messages.at(-1).content;
 				response.end(JSON.stringify({
@@ -58,7 +60,29 @@ describe('static server', () => {
 		const status = await fetch(`${server.url}/api/agent/status`, { headers });
 		expect(status.status).toBe(200);
 		expect(status.headers.get('cache-control')).toBe('no-store');
-		expect(await status.json()).toEqual({ configured: true, available: true, model: 'deployment-model' });
+		expect(await status.json()).toEqual({ configured: true, available: true, voice: true, model: 'deployment-model' });
+
+		const transcribed = await fetch(`${server.url}/api/agent/transcribe`, {
+			method: 'POST',
+			headers: {
+				...headers,
+				Origin: 'https://scribe.example.ts.net',
+				'Content-Type': 'audio/webm',
+				'Sec-Fetch-Site': 'same-origin'
+			},
+			body: Buffer.from('synthetic-audio')
+		});
+		expect(transcribed.status).toBe(200);
+		expect(await transcribed.json()).toEqual({ transcript: 'Synthetic voice transcript' });
+		expect(upstreamRequests.at(-1)).toMatchObject({
+			url: '/v1/audio/transcriptions',
+			method: 'POST',
+			body: 'synthetic-audio'
+		});
+		expect(upstreamRequests.at(-1).headers).toMatchObject({
+			'content-type': 'audio/webm',
+			'x-model': 'deployment-model'
+		});
 
 		const cleaned = await fetch(`${server.url}/api/agent/cleanup`, {
 			method: 'POST',
@@ -72,8 +96,8 @@ describe('static server', () => {
 		});
 		expect(cleaned.status).toBe(200);
 		expect(await cleaned.json()).toEqual({ cleanedThought: 'A cleaned thought.' });
-		expect(upstreamRequests.map(({ url }) => url)).toEqual(['/v1/models', '/v1/chat/completions']);
-		const completion = JSON.parse(upstreamRequests[1].body);
+		expect(upstreamRequests.map(({ url }) => url)).toEqual(['/v1/models', '/v1/audio/transcriptions', '/v1/chat/completions']);
+		const completion = JSON.parse(upstreamRequests[2].body);
 		expect(completion).toMatchObject({ model: 'deployment-model', temperature: 0 });
 		expect(completion.messages.at(-1)).toEqual({ role: 'user', content: 'a raw thought' });
 
@@ -143,7 +167,7 @@ describe('static server', () => {
 
 		const status = await fetch(`${server.url}/api/agent/status`);
 		expect(status.status).toBe(200);
-		expect(await status.json()).toEqual({ configured: true, available: true, model: 'deployment-model' });
+		expect(await status.json()).toEqual({ configured: true, available: true, voice: false, model: 'deployment-model' });
 
 		const cleaned = await fetch(`${server.url}/api/agent/cleanup`, {
 			method: 'POST',

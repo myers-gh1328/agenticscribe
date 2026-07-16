@@ -594,6 +594,71 @@ button {
 	box-shadow: 0 30px 100px rgba(18, 20, 18, 0.42);
 }
 
+.voice-dialog {
+	width: min(calc(100% - 36px), 620px);
+	border: 1px solid color-mix(in srgb, var(--muted) 28%, transparent);
+	border-radius: 14px;
+	background: var(--paper);
+	padding: 0;
+	color: var(--ink);
+	box-shadow: 0 30px 100px rgba(18, 20, 18, 0.42);
+}
+
+.voice-dialog::backdrop {
+	background: rgba(18, 20, 18, 0.68);
+	backdrop-filter: blur(4px);
+}
+
+.voice-sheet {
+	padding: clamp(24px, 5vw, 42px);
+}
+
+.voice-sheet > header,
+.voice-sheet > footer {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+}
+
+.voice-sheet h2 {
+	margin: 0;
+	font-size: clamp(28px, 5vw, 40px);
+	font-weight: normal;
+}
+
+.voice-status {
+	margin: 28px 0;
+	color: var(--muted);
+	font: 13px/1.5 ui-monospace, 'Cascadia Mono', monospace;
+}
+
+.voice-sheet > footer {
+	justify-content: flex-end;
+}
+
+.voice-sheet > footer button {
+	min-height: 42px;
+	border: 1px solid color-mix(in srgb, var(--muted) 34%, transparent);
+	border-radius: 7px;
+	background: transparent;
+	padding: 0 14px;
+	color: var(--ink);
+	cursor: pointer;
+}
+
+.voice-sheet > footer .distill-primary {
+	border-color: #356b52;
+	background: #356b52;
+	color: #fffaf2;
+}
+
+.voice-sheet > footer .voice-stop {
+	border-color: #984839;
+	background: #984839;
+	color: #fffaf2;
+}
+
 .distill-dialog::backdrop {
 	background: rgba(18, 20, 18, 0.68);
 	backdrop-filter: blur(4px);

@@ -27,6 +27,7 @@ checks, and static delivery. See
 - An explicit Distill note action sends the current synchronized Raw version to the deployment-managed agent and presents a reviewable result without changing the source.
 - Accepting a distillation stores it as the same note's read-only Final version; Raw and Final sync together and can be switched in place.
 - Current notes and completed distillations can be exported locally as portable Markdown or plain text.
+- When the deployment reports self-hosted audio support, voice recordings are kept in the browser, transcribed in bounded segments by the deployment-managed model, and inserted into Raw only after the complete transcription succeeds.
 
 Deployments may enforce single-tenant Microsoft Entra authentication, enforce
 identity and application capability headers, or run on a trusted private LAN.
@@ -99,6 +100,12 @@ user explicitly chooses whether the organized result includes a summary; the
 choice defaults off. Raw
 is never replaced; accepted Final content is stored and synchronized with the
 same note.
+Voice transcription is also explicit and optional. Recordings remain
+browser-resident until the user chooses Transcribe. The server forwards bounded
+audio segments only to the deployment-managed self-hosted model, retains no
+audio, and returns text. Failed transcription keeps the browser recording for a
+user-controlled retry; successful transcription discards the audio and leaves
+the resulting Raw text unsaved for review.
 
 Local Markdown file handles, recovery text, and link state remain in a separate
 browser-local IndexedDB database. They are never sent through the notebook API

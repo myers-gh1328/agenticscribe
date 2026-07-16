@@ -35,6 +35,12 @@ modal makes summary inclusion an explicit, default-off choice before it sends
 the note. Image, table, math, and collaboration features
 remain disabled and outside the core note-taking boundary.
 
+Voice controls are capability-gated. `VoiceRecorder` requests microphone access
+only after an explicit user action and rotates `MediaRecorder` into independent
+25-second segments. Closing the dialog discards the recording. Transcription is
+another explicit action, and Raw editor text changes only after every segment
+returns successfully.
+
 ## Build And Offline Contract
 
 - `svelte-kit sync` and `svelte-check` provide frontend type and component checks.

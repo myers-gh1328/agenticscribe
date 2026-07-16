@@ -325,6 +325,47 @@ test('a distillation is saved as the final version of its raw note and survives 
 	await expect(page.getByRole('button', { name: 'Project update', exact: true })).toHaveCount(1);
 });
 
+test('a self-hosted voice recording becomes raw note text only after transcription succeeds', async ({ page }) => {
+	await page.route('**/api/agent/status', (route) => route.fulfill({
+		json: { configured: true, available: true, voice: true, model: 'deployment-model' }
+	}));
+	await page.route('**/api/agent/transcribe', async (route) => {
+		expect(route.request().headers()['content-type']).toBe('audio/webm');
+		expect(route.request().postDataBuffer()?.byteLength).toBeGreaterThan(0);
+		await route.fulfill({ json: { transcript: 'Discuss the launch date with Morgan.' } });
+	});
+	await page.addInitScript(() => {
+		Object.defineProperty(navigator, 'mediaDevices', {
+			value: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) },
+			configurable: true
+		});
+		class FakeMediaRecorder {
+			ondataavailable: ((event: { data: Blob }) => void) | null = null;
+			onstop: (() => void) | null = null;
+			start() {}
+			stop() {
+				this.ondataavailable?.({ data: new Blob(['synthetic voice'], { type: 'audio/webm' }) });
+				this.onstop?.();
+			}
+		}
+		Object.defineProperty(window, 'MediaRecorder', { value: FakeMediaRecorder, configurable: true });
+	});
+	await page.reload();
+	await expect(page.getByRole('button', { name: 'Record voice note' })).toBeVisible();
+
+	await page.getByRole('button', { name: 'Record voice note' }).click();
+	const dialog = page.getByRole('dialog', { name: 'Voice note' });
+	await dialog.getByRole('button', { name: 'Start recording' }).click();
+	await expect(dialog.getByText('Recording…')).toBeVisible();
+	await dialog.getByRole('button', { name: 'Stop recording' }).click();
+	await expect(dialog.getByText('Recording ready on this device')).toBeVisible();
+	await dialog.getByRole('button', { name: 'Transcribe recording' }).click();
+
+	await expect(dialog).not.toBeVisible();
+	await expectEditorMarkdown(page, 'Discuss the launch date with Morgan.\n');
+	await expect(page.getByRole('status')).toContainText('Voice transcript ready — review and save');
+});
+
 test('connecting the local agent cleans only a thought after it is saved', async ({ page }) => {
 	let statusRequests = 0;
 	await page.route('**/api/agent/status', async (route) => {

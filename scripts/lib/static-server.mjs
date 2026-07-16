@@ -35,7 +35,9 @@ export async function startStaticServer({
 	agentEvent = (event) => console.warn(JSON.stringify(event)),
 	agentConnectTimeoutMs = 5_000,
 	agentCleanupTimeoutMs = 30_000,
+	agentTranscriptionTimeoutMs = 180_000,
 	maxAgentBodyBytes = 16 * 1024,
+	maxAgentAudioBytes = 8 * 1024 * 1024,
 	maxAgentResponseBytes = 64 * 1024,
 	maxConcurrentAgentRequests = 2
 }) {
@@ -91,7 +93,9 @@ export async function startStaticServer({
 					agentEvent,
 					agentConnectTimeoutMs,
 					agentCleanupTimeoutMs,
+					agentTranscriptionTimeoutMs,
 					maxAgentBodyBytes,
+					maxAgentAudioBytes,
 					maxAgentResponseBytes,
 					acquireSlot() {
 						if (activeAgentRequests >= maxConcurrentAgentRequests) return false;
@@ -178,7 +182,9 @@ async function handleAgentRequest({
 	agentEvent,
 	agentConnectTimeoutMs,
 	agentCleanupTimeoutMs,
+	agentTranscriptionTimeoutMs,
 	maxAgentBodyBytes,
+	maxAgentAudioBytes,
 	maxAgentResponseBytes,
 	acquireSlot,
 	releaseSlot
@@ -208,7 +214,22 @@ async function handleAgentRequest({
 				...(probe.code ? { code: probe.code } : {})
 			});
 		}
-		respondJson(response, 200, { configured: true, available: probe.available, model: agent.model }, request.method);
+		respondJson(response, 200, { configured: true, available: probe.available, voice: probe.voice, model: agent.model }, request.method);
+		return;
+	}
+	if (request.url === '/api/agent/transcribe') {
+		await handleTranscriptionRequest({
+			request,
+			response,
+			agent,
+			canonicalOrigin,
+			agentFetch,
+			timeoutMs: agentTranscriptionTimeoutMs,
+			maxAgentAudioBytes,
+			maxAgentResponseBytes,
+			acquireSlot,
+			releaseSlot
+		});
 		return;
 	}
 
@@ -314,10 +335,84 @@ async function probeAgent({ agent, agentFetch, timeoutMs, maxAgentResponseBytes 
 	if (!response.ok) return { available: false, outcome: 'upstream_status' };
 	try {
 		const result = await readBoundedResponseJson(response, maxAgentResponseBytes);
-		const available = result.data?.some((candidate) => candidate?.id === agent.model) === true;
-		return { available, outcome: available ? 'available' : 'model_missing' };
+		const candidate = result.data?.find((item) => item?.id === agent.model);
+		const available = Boolean(candidate);
+		return {
+			available,
+			voice: candidate?.capabilities?.includes('audio') === true,
+			outcome: available ? 'available' : 'model_missing'
+		};
 	} catch {
 		return { available: false, outcome: 'invalid_response' };
+	}
+}
+
+async function handleTranscriptionRequest({
+	request,
+	response,
+	agent,
+	canonicalOrigin,
+	agentFetch,
+	timeoutMs,
+	maxAgentAudioBytes,
+	maxAgentResponseBytes,
+	acquireSlot,
+	releaseSlot
+}) {
+	if (request.method !== 'POST') {
+		respondJson(response, 405, { error: 'method_not_allowed' }, request.method);
+		return;
+	}
+	if (!agent) {
+		respondJson(response, 503, { error: 'agent_unavailable' }, request.method);
+		return;
+	}
+	if (request.headers.origin !== canonicalOrigin || request.headers['sec-fetch-site'] !== 'same-origin') {
+		respondJson(response, 403, { error: 'request_origin_rejected' }, request.method);
+		return;
+	}
+	const contentType = request.headers['content-type']?.split(';', 1)[0].trim().toLowerCase();
+	if (!['audio/webm', 'audio/ogg', 'audio/wav', 'audio/x-wav', 'audio/mpeg', 'audio/mp4'].includes(contentType)) {
+		respondJson(response, 415, { error: 'audio_required' }, request.method);
+		return;
+	}
+	let audio;
+	try {
+		audio = await readBoundedBytes(request, maxAgentAudioBytes);
+		if (!audio.length) throw new Error();
+	} catch (error) {
+		respondJson(response, error instanceof BodyTooLargeError ? 413 : 422, {
+			error: error instanceof BodyTooLargeError ? 'audio_too_large' : 'audio_invalid'
+		}, request.method);
+		return;
+	}
+	if (!acquireSlot()) {
+		respondJson(response, 503, { error: 'agent_busy' }, request.method);
+		return;
+	}
+	try {
+		const upstream = await agentFetch(`${agent.baseUrl}/audio/transcriptions`, {
+			method: 'POST',
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': contentType,
+				'X-Model': agent.model
+			},
+			body: audio,
+			redirect: 'error',
+			signal: AbortSignal.timeout(timeoutMs)
+		});
+		if (!upstream.ok) throw new AgentUpstreamError();
+		const result = await readBoundedResponseJson(upstream, maxAgentResponseBytes);
+		const transcript = result.text?.trim();
+		if (!transcript) throw new AgentUpstreamError();
+		respondJson(response, 200, { transcript }, request.method);
+	} catch (error) {
+		respondJson(response, error?.name === 'TimeoutError' ? 504 : 502, {
+			error: error?.name === 'TimeoutError' ? 'agent_timeout' : 'agent_failure'
+		}, request.method);
+	} finally {
+		releaseSlot();
 	}
 }
 
@@ -513,6 +608,10 @@ function authorizeTailscaleRequest(request, requiredCapability, requiredRole) {
 class BodyTooLargeError extends Error {}
 
 async function readBoundedBody(request, maximumBytes) {
+	return (await readBoundedBytes(request, maximumBytes)).toString('utf8');
+}
+
+async function readBoundedBytes(request, maximumBytes) {
 	const declared = Number(request.headers['content-length'] ?? '0');
 	if (Number.isFinite(declared) && declared > maximumBytes) throw new BodyTooLargeError();
 	let size = 0;
@@ -522,7 +621,7 @@ async function readBoundedBody(request, maximumBytes) {
 		if (size > maximumBytes) throw new BodyTooLargeError();
 		chunks.push(chunk);
 	}
-	return Buffer.concat(chunks).toString('utf8');
+	return Buffer.concat(chunks);
 }
 
 async function existingFile(path) {

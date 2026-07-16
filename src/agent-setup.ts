@@ -5,9 +5,11 @@ import './agent-setup.css';
 interface AgentSetupOptions {
 	onOpen(): void;
 	onClose(): void;
+	onStatus?(status: { connected: boolean; voice: boolean }): void;
 }
 
 export class AgentSetup {
+	readonly #onStatus: NonNullable<AgentSetupOptions['onStatus']>;
 	readonly #form = requireElement<HTMLFormElement>('#agent-setup-form');
 	readonly #status = requireElement<HTMLElement>('#agent-status');
 	readonly #model = requireElement<HTMLElement>('#agent-model', this.#form);
@@ -20,6 +22,7 @@ export class AgentSetup {
 	#connected = false;
 
 	constructor(options: AgentSetupOptions) {
+		this.#onStatus = options.onStatus ?? (() => undefined);
 		this.#automaticCleanup.checked = loadAgentPreferences().automaticCleanup;
 
 		const closeButton = requireElement<HTMLButtonElement>('#close-agent-setup');
@@ -56,8 +59,10 @@ export class AgentSetup {
 			const status = await this.#agent.connect();
 			this.#model.textContent = status.model;
 			this.#connected = true;
+			this.#onStatus({ connected: true, voice: status.voice });
 			this.#setStatus('Connected', 'connected');
 		} catch {
+			this.#onStatus({ connected: false, voice: false });
 			if (showFailure) this.#setStatus('Connection failed', 'failed');
 		}
 	}

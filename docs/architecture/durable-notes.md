@@ -82,6 +82,14 @@ An accepted result is persisted as the note's optional `finalText` alongside its
 Raw `text`; legacy rows migrate with no Final version, and both fields share the
 existing note mutation, conflict, ownership, and synchronization boundary.
 
+Voice uses a separate same-origin `/api/agent/transcribe` byte-stream contract.
+The browser creates independently decodable segments shorter than the model's
+audio window and retains them until every segment succeeds. The Node server
+validates origin, MIME type, and size before forwarding each segment to the
+deployment-managed gateway. It never writes audio to disk. Transcripts are
+joined in order and appended to the browser's Raw draft for review; audio is
+discarded after complete success or explicit cancellation.
+
 ## Initial Browser Migration
 
 Existing IndexedDB notes and folders have no server version. The first sync
