@@ -907,9 +907,13 @@ function commitEditor() {
 }
 
 editor.addEventListener('keydown', (event) => {
-	if (event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) return;
-	event.preventDefault();
-	commitEditor();
+	if (event.key !== 'Enter') return;
+	if (event.metaKey || event.ctrlKey) {
+		event.preventDefault();
+		commitEditor();
+		return;
+	}
+	requestAnimationFrame(commitEditor);
 });
 
 saveThought.addEventListener('click', commitEditor);

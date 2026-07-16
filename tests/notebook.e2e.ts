@@ -87,17 +87,15 @@ test('the note screen gives the active note title a distinct heading', async ({ 
 	await expect(page.getByRole('heading', { level: 2, name: 'Quarterly planning' })).toBeVisible();
 });
 
-test('Enter creates a new block and explicit save commits the Markdown document', async ({ page }) => {
+test('Enter creates a new block and commits the preceding Markdown thought', async ({ page }) => {
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
 	await editor.click();
 	await editor.pressSequentially('First paragraph');
 	await editor.press('Enter');
+	await expect(page.getByRole('status')).toContainText('Thought saved to server');
 	await editor.pressSequentially('Second paragraph');
 
 	await expect(editor.locator('p')).toHaveCount(2);
-	await expect(page.getByRole('status')).toContainText('Nothing saved yet');
-	await page.getByRole('button', { name: 'Save thought' }).click();
-	await expect(page.getByRole('status')).toContainText('Thought saved to server');
 });
 
 test('Markdown shortcuts render as formatted content while typing', async ({ page }) => {
@@ -401,7 +399,7 @@ test('connecting the local agent cleans only a thought after it is saved', async
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
 	await replaceEditorText(editor, 'this thought have bad grammer.');
 	await expectEditorMarkdown(page, 'this thought have bad grammer.\n');
-	await editor.press('Control+Enter');
+	await editor.press('Enter');
 	await cleanupRequest;
 	await expectEditorMarkdown(page, 'this thought have bad grammer.\n');
 	releaseCleanup();
