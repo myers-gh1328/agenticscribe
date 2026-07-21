@@ -153,7 +153,7 @@ Private deployment source of truth:
 - App host IP: `192.168.4.222`
 - App port: `3014`
 - Model host inventory name: `nano`
-- Model gateway: `http://192.168.4.43:8080/v1`
+- Model gateway: `http://192.168.20.43:8080/v1`
 
 Names such as `nano` and `nanobot` are inventory labels, not reliable DNS
 names. Do not swap them: AgenticScribe runs on `nanobot`; the model runs on
