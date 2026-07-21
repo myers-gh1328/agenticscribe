@@ -155,7 +155,7 @@ describe('static server', () => {
 			host: '127.0.0.1',
 			port: 0,
 			staticRoot: root,
-			canonicalOrigin: 'http://192.168.4.222:3014',
+			canonicalOrigin: 'http://192.168.20.222:3014',
 			agentBaseUrl: `http://127.0.0.1:${upstreamAddress.port}/v1`,
 			agentModel: 'deployment-model'
 		});
@@ -172,7 +172,7 @@ describe('static server', () => {
 		const cleaned = await fetch(`${server.url}/api/agent/cleanup`, {
 			method: 'POST',
 			headers: {
-				Origin: 'http://192.168.4.222:3014',
+				Origin: 'http://192.168.20.222:3014',
 				'Content-Type': 'application/json',
 				'Sec-Fetch-Site': 'same-origin'
 			},
@@ -356,7 +356,7 @@ describe('static server', () => {
 			staticRoot: root,
 			databasePath: join(root, 'notes.sqlite'),
 			syncEnabled: true,
-			canonicalOrigin: 'http://192.168.4.222:3014'
+			canonicalOrigin: 'http://192.168.20.222:3014'
 		});
 		cleanup.push(async () => {
 			await server.close();
@@ -381,7 +381,7 @@ describe('static server', () => {
 		const created = await fetch(`${server.url}/api/notebook/mutations`, {
 			method: 'POST',
 			headers: {
-				Origin: 'http://192.168.4.222:3014',
+				Origin: 'http://192.168.20.222:3014',
 				'Content-Type': 'application/json',
 				'Sec-Fetch-Site': 'same-origin'
 			},

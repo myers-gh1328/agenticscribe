@@ -150,7 +150,7 @@ Private deployment source of truth:
   `C:\Users\dradi\source\repos\aegir-infra`
 - Ansible root: `infra/ansible`
 - App host inventory name: `nanobot`
-- App host IP: `192.168.4.222`
+- App host IP: `192.168.20.222`
 - App port: `3014`
 - Model host inventory name: `nano`
 - Model gateway: `http://192.168.20.43:8080/v1`
