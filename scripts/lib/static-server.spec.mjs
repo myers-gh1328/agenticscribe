@@ -312,7 +312,7 @@ describe('static server', () => {
 			headers: authorizedHeaders
 		});
 		expect(snapshot.status).toBe(200);
-	expect(await snapshot.json()).toMatchObject({ schemaVersion: 2, notes: [], folders: [] });
+	expect(await snapshot.json()).toMatchObject({ schemaVersion: 3, notes: [], folders: [] });
 
 		const wrongOrigin = await fetch(`${server.url}/api/notebook/mutations`, {
 			method: 'POST',
@@ -365,7 +365,7 @@ describe('static server', () => {
 
 		const snapshot = await fetch(`${server.url}/api/notebook/snapshot`);
 		expect(snapshot.status).toBe(200);
-	expect(await snapshot.json()).toMatchObject({ schemaVersion: 2, notes: [], folders: [] });
+	expect(await snapshot.json()).toMatchObject({ schemaVersion: 3, notes: [], folders: [] });
 
 		const wrongOrigin = await fetch(`${server.url}/api/notebook/mutations`, {
 			method: 'POST',
@@ -414,7 +414,7 @@ describe('static server', () => {
 		expect(await readiness.json()).toMatchObject({
 			ok: true,
 			service: 'agenticscribe',
-		schemaVersion: 2,
+		schemaVersion: 3,
 			syncEnabled: false
 		});
 

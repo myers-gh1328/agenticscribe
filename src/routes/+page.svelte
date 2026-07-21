@@ -86,7 +86,7 @@
 			<header class="note-identity">
 				<span>Current note</span>
 				<div class="note-heading-row">
-					<h2 id="note-title-display">Untitled note</h2>
+					<input id="note-title-display" aria-label="Note title" maxlength="120" value="Untitled note" />
 					<div class="note-versions" id="note-versions" aria-label="Note version" hidden>
 						<button id="show-raw-version" type="button" aria-pressed="true">Raw version</button>
 						<button id="show-final-version" type="button" aria-pressed="false">Final version</button>

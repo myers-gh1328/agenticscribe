@@ -24,6 +24,7 @@ import { VoiceRecorder } from './voice-recorder';
 
 interface NotebookNote {
 	id: string;
+	title: string;
 	savedText: string;
 	finalText?: string;
 	thoughts: ThoughtBoundary[];
@@ -50,7 +51,7 @@ const sidebarToggle = requireElement<HTMLButtonElement>('#sidebar-toggle');
 const notesList = requireElement<HTMLElement>('#notes-list');
 const emptyLocation = requireElement<HTMLElement>('#empty-location');
 const locationName = requireElement<HTMLElement>('#location-name');
-const noteTitleDisplay = requireElement<HTMLElement>('#note-title-display');
+const noteTitleDisplay = requireElement<HTMLInputElement>('#note-title-display');
 const noteVersions = requireElement<HTMLElement>('#note-versions');
 const showRawVersion = requireElement<HTMLButtonElement>('#show-raw-version');
 const showFinalVersion = requireElement<HTMLButtonElement>('#show-final-version');
@@ -97,6 +98,7 @@ let localBindings = await localMarkdownStore.list();
 let activeLocal: { binding: LocalMarkdownBinding; document: LocalMarkdownDocument } | undefined;
 let notes: NotebookNote[] = storedNotes.map((note) => ({
 	id: note.id,
+	title: note.title?.trim() || 'Untitled note',
 	savedText: note.text,
 	finalText: note.finalText,
 	thoughts: note.thoughts,
@@ -107,6 +109,7 @@ for (const draft of storedDrafts) {
 	if (notes.some((note) => note.id === draft.noteId)) continue;
 	notes.push({
 		id: draft.noteId,
+		title: 'Untitled note',
 		savedText: '',
 		thoughts: [],
 		location: draft.location,
@@ -141,7 +144,7 @@ function currentText(note: NotebookNote) {
 }
 
 function noteTitle(note: NotebookNote) {
-	return currentText(note).split('\n').map((line) => line.trim()).find(Boolean) || 'Untitled note';
+	return note.title.trim() || 'Untitled note';
 }
 
 function displayedNoteTitle() {
@@ -151,7 +154,8 @@ function displayedNoteTitle() {
 }
 
 function renderNoteTitle() {
-	noteTitleDisplay.textContent = displayedNoteTitle();
+	noteTitleDisplay.value = displayedNoteTitle();
+	noteTitleDisplay.disabled = Boolean(activeLocal);
 	distillNote.disabled = Boolean(activeLocal);
 	distillNote.title = activeLocal ? 'Local files stay on this device and cannot be sent for distillation.' : '';
 	voiceNote.disabled = Boolean(activeLocal);
@@ -565,7 +569,7 @@ function createNewNote() {
 		editor.focus();
 		return;
 	}
-	const note = { id: createId(), savedText: '', thoughts: [], location: selectedLocation, persisted: false };
+	const note = { id: createId(), title: 'Untitled note', savedText: '', thoughts: [], location: selectedLocation, persisted: false };
 	notes.unshift(note);
 	drafts.set(note.id, '');
 	activeNoteId = note.id;
@@ -707,6 +711,7 @@ async function refreshNotebookFromServer() {
 		if (!hasLocalChanges) drafts.set(stored.id, stored.text);
 		return {
 			id: stored.id,
+			title: stored.title?.trim() || 'Untitled note',
 			savedText: stored.text,
 			finalText: stored.finalText,
 			thoughts: stored.thoughts,
@@ -723,6 +728,7 @@ async function refreshNotebookFromServer() {
 		const refreshed = refreshedNotes[index];
 		return !refreshed
 			|| note.id !== refreshed.id
+			|| note.title !== refreshed.title
 			|| note.savedText !== refreshed.savedText
 			|| note.finalText !== refreshed.finalText
 			|| note.location !== refreshed.location
@@ -792,6 +798,7 @@ async function cleanSubmittedThought(noteId: string, thoughtId: string, rawThoug
 		}
 		await store.commitNote({
 			id: note.id,
+			title: note.title,
 			text: note.savedText,
 			finalText: note.finalText,
 			thoughts: note.thoughts,
@@ -891,6 +898,7 @@ function commitEditor() {
 		note.thoughts = submitted.thoughts;
 		await store.commitNote({
 			id: note.id,
+			title: note.title,
 			text: note.savedText,
 			finalText: note.finalText,
 			thoughts: note.thoughts,
@@ -913,6 +921,30 @@ editor.addEventListener('keydown', (event) => {
 });
 
 saveThought.addEventListener('click', commitEditor);
+noteTitleDisplay.addEventListener('change', () => {
+	const note = activeNote();
+	if (!note || activeLocal) return;
+	note.title = noteTitleDisplay.value.trim() || 'Untitled note';
+	renderNotes();
+	if (!note.persisted) return;
+	void (async () => {
+		await store.commitNote({
+			id: note.id,
+			title: note.title,
+			text: note.savedText,
+			finalText: note.finalText,
+			thoughts: note.thoughts,
+			location: note.location
+		});
+		serverDurable = await synchronizeNotebook();
+		showSaved(serverDurable);
+	})();
+});
+noteTitleDisplay.addEventListener('keydown', (event) => {
+	if (event.key !== 'Enter') return;
+	event.preventDefault();
+	noteTitleDisplay.blur();
+});
 showRawVersion.addEventListener('click', () => showVersion(false));
 showFinalVersion.addEventListener('click', () => showVersion(true));
 
@@ -1062,6 +1094,7 @@ saveDistilledNote.addEventListener('click', () => {
 	void (async () => {
 		await store.commitNote({
 			id: note.id,
+			title: note.title,
 			text: note.savedText,
 			finalText: note.finalText,
 			thoughts: note.thoughts,

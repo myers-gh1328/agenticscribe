@@ -70,7 +70,10 @@ export function openNotebookDatabase({ path, now = () => new Date().toISOString(
 	if (!sqlite.prepare('PRAGMA table_info(notes)').all().some((column) => column.name === 'final_text')) {
 		sqlite.exec('ALTER TABLE notes ADD COLUMN final_text TEXT');
 	}
-	sqlite.prepare("UPDATE metadata SET value = '2' WHERE key = 'schema_version'").run();
+	if (!sqlite.prepare('PRAGMA table_info(notes)').all().some((column) => column.name === 'title')) {
+		sqlite.exec("ALTER TABLE notes ADD COLUMN title TEXT NOT NULL DEFAULT 'Untitled note'");
+	}
+	sqlite.prepare("UPDATE metadata SET value = '3' WHERE key = 'schema_version'").run();
 
 	const statements = {
 		receipt: sqlite.prepare(
@@ -92,9 +95,10 @@ export function openNotebookDatabase({ path, now = () => new Date().toISOString(
 				deleted_at = NULL
 		`),
 		putNote: sqlite.prepare(`
-			INSERT INTO notes(owner_id, id, text, final_text, thoughts_json, location, server_version, created_at, updated_at, deleted_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+			INSERT INTO notes(owner_id, id, title, text, final_text, thoughts_json, location, server_version, created_at, updated_at, deleted_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
 			ON CONFLICT(owner_id, id) DO UPDATE SET
+				title = excluded.title,
 				text = excluded.text,
 				final_text = excluded.final_text,
 				thoughts_json = excluded.thoughts_json,
@@ -111,7 +115,7 @@ export function openNotebookDatabase({ path, now = () => new Date().toISOString(
 			'SELECT id, name, parent_id, server_version, created_at, updated_at FROM folders WHERE owner_id = ? AND deleted_at IS NULL ORDER BY id'
 		),
 		activeNotes: sqlite.prepare(
-			'SELECT id, text, final_text, thoughts_json, location, server_version, created_at, updated_at FROM notes WHERE owner_id = ? AND deleted_at IS NULL ORDER BY id'
+			'SELECT id, title, text, final_text, thoughts_json, location, server_version, created_at, updated_at FROM notes WHERE owner_id = ? AND deleted_at IS NULL ORDER BY id'
 		)
 	};
 
@@ -187,6 +191,7 @@ export function openNotebookDatabase({ path, now = () => new Date().toISOString(
 		statements.putNote.run(
 			ownerId,
 			mutation.entityId,
+			mutation.note.title?.trim() || 'Untitled note',
 			mutation.note.text,
 			mutation.note.finalText ?? null,
 			JSON.stringify(mutation.note.thoughts),
@@ -213,7 +218,7 @@ export function openNotebookDatabase({ path, now = () => new Date().toISOString(
 		snapshot(ownerId = 'local-owner') {
 			validateOwnerId(ownerId);
 			return {
-				schemaVersion: 2,
+				schemaVersion: 3,
 				folders: statements.activeFolders.all(ownerId).map(mapFolder),
 				notes: statements.activeNotes.all(ownerId).map(mapNote)
 			};
@@ -288,6 +293,7 @@ function validateFolder(folder, entityId) {
 function validateNote(note, entityId) {
 	if (
 		note?.id !== entityId ||
+		(note.title !== undefined && (typeof note.title !== 'string' || [...note.title.trim()].length > 120)) ||
 		typeof note.text !== 'string' ||
 		Buffer.byteLength(note.text, 'utf8') > MAX_NOTE_BYTES ||
 		(note.finalText !== undefined && (typeof note.finalText !== 'string' || Buffer.byteLength(note.finalText, 'utf8') > MAX_NOTE_BYTES)) ||
@@ -347,6 +353,7 @@ function mapFolder(row) {
 function mapNote(row) {
 	return {
 		id: row.id,
+		title: row.title,
 		text: row.text,
 		finalText: row.final_text ?? undefined,
 		thoughts: JSON.parse(row.thoughts_json),

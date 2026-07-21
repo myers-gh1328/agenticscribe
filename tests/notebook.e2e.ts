@@ -26,7 +26,11 @@ async function openOrganizer(page: Page) {
 	if (!alreadyOpen && await toggle.isVisible()) await toggle.click();
 }
 
-async function saveThought(page: Page, text: string) {
+async function saveThought(page: Page, text: string, title?: string) {
+	if (title) {
+		await page.getByRole('textbox', { name: 'Note title' }).fill(title);
+		await page.getByRole('textbox', { name: 'Note title' }).press('Enter');
+	}
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
 	await editor.click();
 	await editor.pressSequentially(text);
@@ -77,14 +81,25 @@ test('dark mode is labeled and persists across reloads', async ({ page }) => {
 	await expect(page.getByRole('switch', { name: 'Use light mode' })).toBeVisible();
 });
 
-test('the note screen gives the active note title a distinct heading', async ({ page }) => {
-	await expect(page.getByRole('heading', { level: 2, name: 'Untitled note' })).toBeVisible();
+test('the note title is edited independently from Markdown content', async ({ page }) => {
+	const title = page.getByRole('textbox', { name: 'Note title' });
+	await expect(title).toHaveValue('Untitled note');
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
 	await editor.click();
 	await editor.pressSequentially('# ');
 	await editor.pressSequentially('Quarterly planning');
 
-	await expect(page.getByRole('heading', { level: 2, name: 'Quarterly planning' })).toBeVisible();
+	await expect(title).toHaveValue('Untitled note');
+	await title.fill('Q3 priorities');
+	await title.press('Enter');
+	await expectEditorMarkdown(page, '# Quarterly planning\n');
+	await expect(title).toHaveValue('Q3 priorities');
+	await page.getByRole('button', { name: 'Save thought' }).click();
+	await expect(page.getByRole('status')).toContainText('Thought saved to server');
+
+	await page.reload();
+	await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Q3 priorities');
+	await expectEditorMarkdown(page, '# Quarterly planning\n');
 });
 
 test('Enter creates a new block and explicit save commits the Markdown document', async ({ page }) => {
@@ -235,7 +250,7 @@ test('an already-open device refreshes notes when it regains focus', async ({ br
 		await otherEditor.click();
 		await otherEditor.pressSequentially('Unfinished on the second device');
 
-		await saveThought(page, 'Written on the first device');
+		await saveThought(page, 'Written on the first device', 'Written on the first device');
 		await otherPage.evaluate(() => window.dispatchEvent(new Event('blur')));
 		await otherPage.bringToFront();
 		await otherPage.evaluate(() => window.dispatchEvent(new Event('focus')));
@@ -292,6 +307,8 @@ test('a distillation is saved as the final version of its raw note and survives 
 	await page.getByRole('textbox', { name: 'Raw Markdown' }).fill(`${source}\n`);
 	await page.getByRole('button', { name: 'Visual' }).click();
 	await expectEditorMarkdown(page, `${source}\n`);
+	await page.getByRole('textbox', { name: 'Note title' }).fill('Project update');
+	await page.getByRole('textbox', { name: 'Note title' }).press('Enter');
 	await page.getByRole('button', { name: 'Save thought' }).click();
 	await expect(page.getByRole('status')).toContainText('Thought saved to server');
 
@@ -491,7 +508,7 @@ test('a local Markdown file writes locally without creating a notebook mutation'
 });
 
 test('explicit save commits a note and reload restores only committed text', async ({ page }) => {
-	await saveThought(page, 'First saved thought');
+	await saveThought(page, 'First saved thought', 'First saved thought');
 	await openOrganizer(page);
 	await expect(page.getByRole('button', { name: 'First saved thought', exact: true })).toBeVisible();
 
@@ -509,7 +526,7 @@ test('the organizer stays pinned while a long note scrolls', async ({ page }) =>
 });
 
 test('switching and reload preserve an unfinished draft locally', async ({ page }) => {
-	await saveThought(page, 'First note');
+	await saveThought(page, 'First note', 'First note');
 	await openOrganizer(page);
 	await expect(page.getByRole('button', { name: 'First note', exact: true })).toBeVisible();
 	await page.getByRole('button', { name: '＋ New note' }).click();
@@ -517,7 +534,7 @@ test('switching and reload preserve an unfinished draft locally', async ({ page 
 	await expect(page.getByRole('button', { name: 'First note', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Untitled note unsaved', exact: true })).toBeVisible();
 	await expectEditorMarkdown(page, '');
-	await saveThought(page, 'Second note');
+	await saveThought(page, 'Second note', 'Second note');
 
 	await openOrganizer(page);
 	await expect(page.getByRole('button', { name: 'Second note', exact: true })).toBeVisible();
@@ -545,7 +562,7 @@ test('a new note is created directly inside the selected folder', async ({ page 
 	await page.getByRole('button', { name: 'Save', exact: true }).click();
 	await page.getByRole('button', { name: 'Work', exact: true }).click();
 	await page.getByRole('button', { name: '＋ New note' }).click();
-	await saveThought(page, 'Created in Work');
+	await saveThought(page, 'Created in Work', 'Created in Work');
 
 	await openOrganizer(page);
 	await expect(page.getByRole('heading', { name: 'WORK NOTES' })).toBeVisible();
@@ -558,7 +575,7 @@ test('a new note is created directly inside the selected folder', async ({ page 
 });
 
 test('nested folders can be renamed and a note can be moved into them', async ({ page }) => {
-	await saveThought(page, 'Move this note');
+	await saveThought(page, 'Move this note', 'Move this note');
 	await openOrganizer(page);
 	await page.getByRole('button', { name: 'New folder', exact: true }).click();
 	await page.getByRole('textbox', { name: 'Folder name' }).fill('Work');
@@ -593,7 +610,7 @@ test('nested folders can be renamed and a note can be moved into them', async ({
 });
 
 test('deletion requires confirmation and deleting the final note leaves a blank draft', async ({ page }) => {
-	await saveThought(page, 'Delete carefully');
+	await saveThought(page, 'Delete carefully', 'Delete carefully');
 	await openOrganizer(page);
 	await page.getByRole('button', { name: 'Actions for Delete carefully' }).click();
 	await page.getByRole('menuitem', { name: 'Delete note' }).click();

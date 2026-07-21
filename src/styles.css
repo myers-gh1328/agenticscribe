@@ -583,6 +583,23 @@ button {
 	background: #7f382b;
 }
 
+#note-title-display {
+	min-width: 12rem;
+	max-width: 32rem;
+	margin: 0;
+	border: 0;
+	border-bottom: 1px solid transparent;
+	background: transparent;
+	color: var(--ink);
+	font: 500 clamp(26px, 4vw, 38px)/1.08 Georgia, 'Times New Roman', serif;
+	letter-spacing: -0.025em;
+}
+
+#note-title-display:focus {
+	border-bottom-color: currentColor;
+	outline: none;
+}
+
 .distill-dialog {
 	width: min(calc(100% - 36px), 820px);
 	max-height: min(88vh, 880px);

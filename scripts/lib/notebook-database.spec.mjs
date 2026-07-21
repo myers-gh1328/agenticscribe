@@ -45,6 +45,7 @@ function putNote(overrides = {}) {
 		expectedVersion: 0,
 		note: {
 			id: 'note-1',
+			title: 'Durable title',
 			text: 'Durable thought\n',
 			finalText: '# Final\n\nDurable summary.',
 			thoughts: [{ id: 'thought-1', end: 16 }],
@@ -82,13 +83,14 @@ describe('notebook database', () => {
 		expect(folderResult).toMatchObject({ status: 'applied', entityVersion: 1 });
 		expect(noteResult).toMatchObject({ status: 'applied', entityVersion: 1 });
 		expect(database.snapshot()).toEqual({
-			schemaVersion: 2,
+			schemaVersion: 3,
 			folders: [
 				expect.objectContaining({ id: 'folder-work', name: 'Work', serverVersion: 1 })
 			],
 			notes: [
 				expect.objectContaining({
 					id: 'note-1',
+					title: 'Durable title',
 					text: 'Durable thought\n',
 					finalText: '# Final\n\nDurable summary.',
 					serverVersion: 1

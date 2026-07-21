@@ -79,8 +79,10 @@ nonblank current-note string and one boolean summary choice, shares the bounded 
 does not retry automatically, and returns untrusted Markdown as text. The API is not a generic completion proxy and
 never accepts a caller-selected endpoint, model, prompt, or messages array.
 An accepted result is persisted as the note's optional `finalText` alongside its
-Raw `text`; legacy rows migrate with no Final version, and both fields share the
-existing note mutation, conflict, ownership, and synchronization boundary.
+Raw `text`. A note's independently editable `title` is stored separately and is
+never inferred from Raw Markdown; legacy rows migrate to `Untitled note` and no
+Final version. All fields share the existing note mutation, conflict, ownership,
+and synchronization boundary.
 
 Voice uses a separate same-origin `/api/agent/transcribe` byte-stream contract.
 The browser creates independently decodable segments shorter than the model's

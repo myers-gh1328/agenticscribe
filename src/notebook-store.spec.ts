@@ -417,8 +417,8 @@ describe('NotebookStore', () => {
 		expect(await store.loadNote('note-2')).toMatchObject({ text: 'Keep me\n' });
 	});
 
-	it('derives a label from the first nonempty line and falls back for blank text', () => {
-		expect(noteLabel('\n  Meeting notes  \nNext')).toBe('Meeting notes');
+	it('uses only the independent title for a note label', () => {
+		expect(noteLabel('  Meeting notes  ')).toBe('Meeting notes');
 		expect(noteLabel('   \n')).toBe('Untitled note');
 	});
 

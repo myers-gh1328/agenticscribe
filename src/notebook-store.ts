@@ -12,6 +12,7 @@ export interface ThoughtBoundary {
 
 export interface CommittedNote {
 	id: string;
+	title?: string;
 	text: string;
 	finalText?: string;
 	thoughts: ThoughtBoundary[];
@@ -217,11 +218,8 @@ function validateCommittedNote(note: CommittedNote) {
 	if (previousEnd !== note.text.length) throw new Error('Uncommitted text cannot be persisted.');
 }
 
-export function noteLabel(text: string) {
-	return text
-		.split(/\r?\n/)
-		.map((line) => line.trim())
-		.find(Boolean) ?? 'Untitled note';
+export function noteLabel(title: string) {
+	return title.trim() || 'Untitled note';
 }
 
 export class NotebookStore {
@@ -367,7 +365,7 @@ export class NotebookStore {
 				type: 'put-note',
 				entityId: id,
 				expectedVersion: 0,
-				note: { id, text: moved.text, finalText: moved.finalText, thoughts: moved.thoughts, location: moved.location }
+				note: { id, title: moved.title, text: moved.text, finalText: moved.finalText, thoughts: moved.thoughts, location: moved.location }
 			});
 			return structuredClone(moved);
 		});
@@ -554,6 +552,7 @@ export class NotebookStore {
 					const previous = await this.#database.notes.get(note.id);
 					await this.#database.notes.put({
 						id: note.id,
+						title: note.title,
 						text: note.text,
 						finalText: note.finalText,
 						thoughts: note.thoughts,
@@ -593,7 +592,7 @@ export class NotebookStore {
 							type: 'put-note',
 							entityId: note.id,
 							expectedVersion: 0,
-							note: { id: note.id, text: note.text, finalText: note.finalText, thoughts: note.thoughts, location: note.location }
+							note: { id: note.id, title: note.title, text: note.text, finalText: note.finalText, thoughts: note.thoughts, location: note.location }
 						});
 					}
 				}

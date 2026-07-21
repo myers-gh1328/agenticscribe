@@ -21,7 +21,7 @@ describe('notebook backup', () => {
 		live.applyMutation(folderMutation(), 'owner@example.test');
 
 		const result = await backupNotebookDatabase({ sourcePath, destinationPath: snapshotPath });
-	expect(result).toMatchObject({ integrity: 'ok', schemaVersion: 2 });
+	expect(result).toMatchObject({ integrity: 'ok', schemaVersion: 3 });
 		expect((await stat(snapshotPath)).mode & 0o777).toBe(0o600);
 
 		const restored = openNotebookDatabase({ path: snapshotPath });
