@@ -42,8 +42,9 @@ AgenticScribe is an offline-capable, self-hosted notes application.
   backup access can expose them.
 
 Do not reintroduce the old prototype assumptions that IndexedDB is the only
-store, Enter always commits, the browser owns the model endpoint, or the app is
-only a static site.
+store, the browser owns the model endpoint, or the app is only a static site.
+Enter explicitly saves the current thought and triggers enabled cleanup;
+Shift+Enter inserts a line break without saving.
 
 ## Repository Map
 

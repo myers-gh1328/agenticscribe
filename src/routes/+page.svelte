@@ -104,7 +104,7 @@
 		<div class="capture-state" id="capture-state" role="status" aria-live="polite">
 			<span id="state-text">Nothing saved yet</span>
 			<button id="save-thought" type="button">Save thought</button>
-			<span class="shortcut">⌘/Ctrl + Enter saves</span>
+			<span class="shortcut">Enter saves · Shift + Enter adds a line</span>
 		</div>
 	</div>
 

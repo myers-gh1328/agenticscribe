@@ -35,7 +35,7 @@ async function saveThought(page: Page, text: string, title?: string) {
 	await editor.click();
 	await editor.pressSequentially(text);
 	await expectEditorMarkdown(page, `${text}\n`);
-	await editor.press('Control+Enter');
+	await editor.press('Enter');
 	await expect(page.getByRole('status')).toContainText('Thought saved to server');
 }
 
@@ -61,6 +61,38 @@ test('the notebook exposes discoverable Markdown formatting controls', async ({ 
 	await expect(page.getByRole('button', { name: 'Bullet list' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Link' })).toBeVisible();
 	await expect(page.getByRole('textbox', { name: 'Continuous note' })).toBeEditable();
+});
+
+test('Enter activates Markdown toolbar controls without saving the note', async ({ page }) => {
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await replaceEditorText(editor, 'Keyboard formatting');
+	await editor.press('ControlOrMeta+A');
+	const bold = page.getByRole('button', { name: 'Bold' });
+	await bold.focus();
+
+	await bold.press('Enter');
+
+	await expect(editor.locator('strong')).toHaveText('Keyboard formatting');
+	await expectEditorMarkdown(page, '**Keyboard formatting**\n');
+	await expect(page.getByRole('status')).toContainText('Nothing saved yet');
+});
+
+test('Space and Enter operate the Markdown heading selector without saving', async ({ page }) => {
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await replaceEditorText(editor, 'Keyboard heading');
+	await editor.press('ControlOrMeta+A');
+	const headingSelector = page.locator('.top-bar-heading-button');
+	await headingSelector.focus();
+
+	await headingSelector.press(' ');
+	const headingOne = page.getByRole('button', { name: 'Heading 1', exact: true });
+	await expect(headingOne).toBeVisible();
+	await headingOne.focus();
+	await headingOne.press('Enter');
+
+	await expect(editor.getByRole('heading', { level: 1, name: 'Keyboard heading' })).toBeVisible();
+	await expectEditorMarkdown(page, '# Keyboard heading\n');
+	await expect(page.getByRole('status')).toContainText('Nothing saved yet');
 });
 
 test('dark mode is labeled and persists across reloads', async ({ page }) => {
@@ -101,15 +133,73 @@ test('the note title is edited independently from Markdown content', async ({ pa
 	await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Q3 priorities');
 	await expectEditorMarkdown(page, '# Quarterly planning\n');
 });
+test('Enter saves the current thought', async ({ page }) => {
+	await page.goto('/');
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await replaceEditorText(editor, 'First thought');
 
-test('Enter creates a new block and explicit save commits the Markdown document', async ({ page }) => {
+	await editor.press('Enter');
+
+	await expect(page.getByRole('status')).toContainText('Thought saved to server');
+});
+
+test('a repeated Enter keydown does not submit another save', async ({ page }) => {
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await replaceEditorText(editor, 'One submission');
+
+	await editor.evaluate((element) => {
+		element.dispatchEvent(new KeyboardEvent('keydown', {
+			key: 'Enter',
+			bubbles: true,
+			cancelable: true,
+			repeat: true
+		}));
+	});
+	await page.waitForTimeout(300);
+
+	await expect(page.getByRole('status')).toContainText('Nothing saved yet');
+});
+
+test('Enter activates editor mode controls without saving the note', async ({ page }) => {
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await replaceEditorText(editor, 'Unfinished thought');
+	const markdownMode = page.getByRole('button', { name: 'Markdown', exact: true });
+	await markdownMode.focus();
+
+	await markdownMode.press('Enter');
+
+	await expect(page.getByRole('textbox', { name: 'Raw Markdown' })).toBeVisible();
+	await expect(page.getByRole('status')).toContainText('Nothing saved yet');
+});
+
+test('Enter used to confirm IME composition does not save the note', async ({ page }) => {
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await replaceEditorText(editor, 'Composing thought');
+
+	await editor.evaluate((element) => {
+		const event = new KeyboardEvent('keydown', {
+			key: 'Enter',
+			bubbles: true,
+			cancelable: true,
+			composed: true
+		});
+		Object.defineProperty(event, 'isComposing', { value: true });
+		element.dispatchEvent(event);
+	});
+	await page.waitForTimeout(300);
+
+	await expect(page.getByRole('status')).toContainText('Nothing saved yet');
+});
+
+test('Shift+Enter creates a line break without saving the note', async ({ page }) => {
+	await page.goto('/');
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
 	await editor.click();
-	await editor.pressSequentially('First paragraph');
-	await editor.press('Enter');
-	await editor.pressSequentially('Second paragraph');
+	await editor.pressSequentially('First line');
+	await editor.press('Shift+Enter');
+	await editor.pressSequentially('Second line');
 
-	await expect(editor.locator('p')).toHaveCount(2);
+	await expect(editor.locator('br')).toHaveCount(1);
 	await expect(page.getByRole('status')).toContainText('Nothing saved yet');
 	await page.getByRole('button', { name: 'Save thought' }).click();
 	await expect(page.getByRole('status')).toContainText('Thought saved to server');
@@ -220,7 +310,7 @@ test('an offline commit syncs after reconnect and survives a new browser profile
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
 	await replaceEditorText(editor, 'Written without a connection');
 	await expectEditorMarkdown(page, 'Written without a connection\n');
-	await editor.press('Control+Enter');
+	await editor.press('Enter');
 	await expect(page.getByRole('status')).toContainText('Thought saved offline — pending sync');
 
 	await context.setOffline(false);
@@ -418,7 +508,7 @@ test('connecting the local agent cleans only a thought after it is saved', async
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
 	await replaceEditorText(editor, 'this thought have bad grammer.');
 	await expectEditorMarkdown(page, 'this thought have bad grammer.\n');
-	await editor.press('Control+Enter');
+	await editor.press('Enter');
 	await cleanupRequest;
 	await expectEditorMarkdown(page, 'this thought have bad grammer.\n');
 	releaseCleanup();
@@ -451,7 +541,7 @@ test('a failed cleanup keeps the submitted thought unchanged', async ({ page }) 
 	const editor = page.getByRole('textbox', { name: 'Continuous note' });
 	await replaceEditorText(editor, 'keep this raw thought');
 	await expectEditorMarkdown(page, 'keep this raw thought\n');
-	await editor.press('Control+Enter');
+	await editor.press('Enter');
 	await expect(page.getByRole('status')).toContainText('Cleanup failed — original kept');
 	await expectEditorMarkdown(page, 'keep this raw thought\n');
 
@@ -495,7 +585,7 @@ test('a local Markdown file writes locally without creating a notebook mutation'
 	await editor.locator('p').last().click();
 	await editor.pressSequentially('Saved only here');
 	await expectEditorMarkdown(page, '# Local notes\n\nSaved only here\n');
-	await editor.press('Control+Enter');
+	await editor.press('Enter');
 	await expect(page.getByRole('status')).toContainText('Saved to local file');
 
 	const fileText = await page.evaluate(async () => {

@@ -11,8 +11,8 @@ checks, and static delivery. See
 
 ## Current functionality
 
-- Enter creates a new paragraph in the Markdown editor.
-- Save thought or Cmd/Ctrl+Enter commits immediately to IndexedDB and synchronizes to the private server.
+- Enter saves the current thought; Shift+Enter inserts a line break in the Markdown editor.
+- Save thought or Enter commits immediately to IndexedDB and synchronizes to the private server.
 - Open devices pull remote notebook changes every 30 seconds and when they regain focus or visibility, without replacing unfinished local drafts.
 - Uncommitted text is kept as a browser-local draft so it survives switching and reload.
 - Notes can be created, switched, moved, and permanently deleted with confirmation.

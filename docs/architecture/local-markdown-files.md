@@ -41,7 +41,7 @@ file name is displayed; filesystem paths are neither available nor persisted.
 
 ## Commit And Failure Rules
 
-1. Save thought or Cmd/Ctrl+Enter snapshots the submitted editor value and stores it as local recovery.
+1. Save thought or Enter snapshots the submitted editor value and stores it as local recovery; Shift+Enter inserts a line break without saving.
 2. If automatic cleanup applies to a newly appended nonblank thought, await it.
 3. On cleanup success, replace only that thought. On cleanup failure, retain
    the raw thought. If cleanup is disabled or unsafe for the edit shape, retain

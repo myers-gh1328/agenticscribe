@@ -192,6 +192,26 @@ export class MarkdownEditor {
 			this.focus();
 		});
 
-		this.#root.addEventListener('keydown', (event) => this.#emit('keydown', event), true);
+		this.#root.addEventListener('keydown', (event) => {
+			if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
+			if (!(event.target instanceof Element)) return;
+			const button = event.target.closest<HTMLButtonElement>(
+				'.top-bar-item, .top-bar-heading-button, .top-bar-heading-option'
+			);
+			if (!button) return;
+			event.preventDefault();
+			button.dispatchEvent(new PointerEvent('pointerdown', {
+				bubbles: true,
+				cancelable: true,
+				button: 0,
+				pointerType: 'mouse'
+			}));
+		}, true);
+
+		this.#root.addEventListener('keydown', (event) => {
+			if (!(event.target instanceof Element)) return;
+			if (!event.target.closest('.milkdown .editor, .markdown-source')) return;
+			this.#emit('keydown', event);
+		}, true);
 	}
 }
