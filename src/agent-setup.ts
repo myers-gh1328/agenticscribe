@@ -20,6 +20,8 @@ export class AgentSetup {
 	readonly #connectButton = requireElement<HTMLButtonElement>('.connect-agent', this.#form);
 	readonly #agent = new LocalAgent();
 	#connected = false;
+	#connectionRefresh: Promise<void> | undefined;
+	#showConnectionFailure = false;
 
 	constructor(options: AgentSetupOptions) {
 		this.#onStatus = options.onStatus ?? (() => undefined);
@@ -42,6 +44,11 @@ export class AgentSetup {
 		return this.#connected ? this.#agent : undefined;
 	}
 
+	async agentForCleanup() {
+		if (!this.#connected) await this.#refreshConnection(false);
+		return this.agent;
+	}
+
 	get automaticCleanupEnabled() {
 		return this.#automaticCleanup.checked;
 	}
@@ -55,6 +62,21 @@ export class AgentSetup {
 	}
 
 	async #refreshConnection(showFailure: boolean) {
+		this.#showConnectionFailure ||= showFailure;
+		if (this.#connectionRefresh) return this.#connectionRefresh;
+		const refresh = this.#runConnectionRefresh();
+		this.#connectionRefresh = refresh;
+		try {
+			await refresh;
+		} finally {
+			if (this.#connectionRefresh === refresh) {
+				this.#connectionRefresh = undefined;
+				this.#showConnectionFailure = false;
+			}
+		}
+	}
+
+	async #runConnectionRefresh() {
 		try {
 			const status = await this.#agent.connect();
 			this.#model.textContent = status.model;
@@ -62,8 +84,10 @@ export class AgentSetup {
 			this.#onStatus({ connected: true, voice: status.voice });
 			this.#setStatus('Connected', 'connected');
 		} catch {
+			this.#connected = false;
+			this.#model.textContent = 'Unavailable';
 			this.#onStatus({ connected: false, voice: false });
-			if (showFailure) this.#setStatus('Connection failed', 'failed');
+			this.#setStatus(this.#showConnectionFailure ? 'Connection failed' : 'Not connected', this.#showConnectionFailure ? 'failed' : undefined);
 		}
 	}
 

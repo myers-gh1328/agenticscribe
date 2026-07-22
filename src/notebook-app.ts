@@ -778,10 +778,12 @@ function showCleaning() {
 }
 
 async function cleanSubmittedThought(noteId: string, thoughtId: string, rawThought: string) {
-	if (!agentSetup.agent || !agentSetup.automaticCleanupEnabled || !rawThought.trim()) return;
+	if (!agentSetup.automaticCleanupEnabled || !rawThought.trim()) return;
+	const agent = await agentSetup.agentForCleanup();
+	if (!agent) return;
 	showCleaning();
 	try {
-		const cleaned = await agentSetup.agent.cleanThought(rawThought);
+		const cleaned = await agent.cleanThought(rawThought);
 		const note = notes.find((candidate) => candidate.id === noteId);
 		if (!note) return;
 		const update = applyThoughtCleanup(note.savedText, note.thoughts, thoughtId, cleaned);

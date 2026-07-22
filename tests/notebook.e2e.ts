@@ -520,6 +520,60 @@ test('connecting the local agent cleans only a thought after it is saved', async
 	await expectEditorMarkdown(page, 'This thought has bad grammar.\n\n');
 });
 
+test('automatic cleanup still runs after an earlier agent status probe failed', async ({ page }) => {
+	let statusRequests = 0;
+	let cleanupRequests = 0;
+	await page.route('**/api/agent/status', async (route) => {
+		statusRequests += 1;
+		if (statusRequests === 1) {
+			await route.fulfill({ status: 503, json: { error: 'agent_unavailable' } });
+			return;
+		}
+		await route.fulfill({ json: { configured: true, available: true, model: 'local-test', voice: false } });
+	});
+	await page.route('**/api/agent/cleanup', async (route) => {
+		cleanupRequests += 1;
+		expect(route.request().postDataJSON()).toEqual({ thought: 'ths is badd grammr, pls fx mee' });
+		await route.fulfill({ json: { cleanedThought: 'This is bad grammar, please fix me.' } });
+	});
+	await page.reload();
+	await openOrganizer(page);
+	await page.getByRole('button', { name: 'Agent setup' }).click();
+	await expect(page.getByText('Not connected', { exact: true })).toBeVisible();
+	await expect.poll(() => statusRequests).toBe(1);
+	await page.getByRole('button', { name: 'Back to notes' }).click();
+
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await replaceEditorText(editor, 'ths is badd grammr, pls fx mee');
+	await expectEditorMarkdown(page, 'ths is badd grammr, pls fx mee\n');
+	await editor.press('Enter');
+
+	await expect(page.getByRole('status')).toContainText('Thought cleaned and saved to server');
+	await expectEditorMarkdown(page, 'This is bad grammar, please fix me.\n\n');
+	expect(statusRequests).toBe(2);
+	expect(cleanupRequests).toBe(1);
+});
+
+test('a failed agent retest clears the cached connected state', async ({ page }) => {
+	let statusRequests = 0;
+	await page.route('**/api/agent/status', async (route) => {
+		statusRequests += 1;
+		if (statusRequests === 1) {
+			await route.fulfill({ json: { configured: true, available: true, model: 'local-test', voice: false } });
+			return;
+		}
+		await route.fulfill({ status: 503, json: { error: 'agent_unavailable' } });
+	});
+	await page.reload();
+	await openOrganizer(page);
+	await page.getByRole('button', { name: 'Agent setup' }).click();
+	await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Test connection' }).click();
+	await expect(page.getByText('Connection failed', { exact: true })).toBeVisible();
+	await expect(page.getByText('Unavailable', { exact: true })).toBeVisible();
+	expect(statusRequests).toBe(2);
+});
+
 test('a failed cleanup keeps the submitted thought unchanged', async ({ page }) => {
 	await page.route('**/api/agent/status', async (route) => {
 		await route.fulfill({
