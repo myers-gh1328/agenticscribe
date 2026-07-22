@@ -141,6 +141,7 @@ test('Enter saves the current thought', async ({ page }) => {
 	await editor.press('Enter');
 
 	await expect(page.getByRole('status')).toContainText('Thought saved to server');
+	await expectEditorMarkdown(page, 'First thought\n\n');
 });
 
 test('a repeated Enter keydown does not submit another save', async ({ page }) => {
@@ -383,7 +384,7 @@ test('deployment-managed agent setup is reachable without browser-owned connecti
 	await expect(page.getByText('Not connected', { exact: true })).toBeVisible();
 
 	await page.getByRole('button', { name: 'Back to notes' }).click();
-	await expectEditorMarkdown(page, 'Keep this note\n');
+	await expectEditorMarkdown(page, 'Keep this note\n\n');
 });
 
 test('a distillation is saved as the final version of its raw note and survives reload', async ({ page }) => {
@@ -510,13 +511,13 @@ test('connecting the local agent cleans only a thought after it is saved', async
 	await expectEditorMarkdown(page, 'this thought have bad grammer.\n');
 	await editor.press('Enter');
 	await cleanupRequest;
-	await expectEditorMarkdown(page, 'this thought have bad grammer.\n');
+	await expectEditorMarkdown(page, 'this thought have bad grammer.\n\n');
 	releaseCleanup();
-	await expectEditorMarkdown(page, 'This thought has bad grammar.\n');
+	await expectEditorMarkdown(page, 'This thought has bad grammar.\n\n');
 	await expect(page.getByRole('status')).toContainText('Thought cleaned and saved');
 
 	await page.reload();
-	await expectEditorMarkdown(page, 'This thought has bad grammar.\n');
+	await expectEditorMarkdown(page, 'This thought has bad grammar.\n\n');
 });
 
 test('a failed cleanup keeps the submitted thought unchanged', async ({ page }) => {
@@ -543,10 +544,10 @@ test('a failed cleanup keeps the submitted thought unchanged', async ({ page }) 
 	await expectEditorMarkdown(page, 'keep this raw thought\n');
 	await editor.press('Enter');
 	await expect(page.getByRole('status')).toContainText('Cleanup failed — original kept');
-	await expectEditorMarkdown(page, 'keep this raw thought\n');
+	await expectEditorMarkdown(page, 'keep this raw thought\n\n');
 
 	await page.reload();
-	await expectEditorMarkdown(page, 'keep this raw thought\n');
+	await expectEditorMarkdown(page, 'keep this raw thought\n\n');
 });
 
 test('a local Markdown file writes locally without creating a notebook mutation', async ({ page }) => {
@@ -587,6 +588,7 @@ test('a local Markdown file writes locally without creating a notebook mutation'
 	await expectEditorMarkdown(page, '# Local notes\n\nSaved only here\n');
 	await editor.press('Enter');
 	await expect(page.getByRole('status')).toContainText('Saved to local file');
+	await expectEditorMarkdown(page, '# Local notes\n\nSaved only here\n\n');
 
 	const fileText = await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();
@@ -597,13 +599,96 @@ test('a local Markdown file writes locally without creating a notebook mutation'
 	expect(notebookMutations).toBe(0);
 });
 
+test('a failed local Markdown Enter-save preserves the new line as recovery', async ({ page }) => {
+	await page.addInitScript(() => {
+		Object.defineProperty(window, 'showOpenFilePicker', {
+			configurable: true,
+			value: async () => {
+				const root = await navigator.storage.getDirectory();
+				const handle = await root.getFileHandle('failing-local-notes.md', { create: true });
+				const writable = await handle.createWritable();
+				await writable.write('# Local notes\n');
+				await writable.close();
+				const permissionTarget = Object.getPrototypeOf(handle) as FileSystemFileHandle & {
+					queryPermission?: () => Promise<PermissionState>;
+					requestPermission?: () => Promise<PermissionState>;
+				};
+				permissionTarget.queryPermission = async () => 'granted';
+				permissionTarget.requestPermission = async () => 'granted';
+				Object.defineProperty(handle, 'createWritable', {
+					configurable: true,
+					value: async () => {
+						throw new Error('synthetic write failure');
+					}
+				});
+				return [handle];
+			}
+		});
+	});
+	await page.reload();
+
+	await openOrganizer(page);
+	await page.getByRole('button', { name: 'Open .md file' }).click();
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await editor.locator('p').last().click();
+	await editor.pressSequentially('Keep recovery');
+	await expectEditorMarkdown(page, '# Local notes\n\nKeep recovery\n');
+	await editor.press('Enter');
+	await expect(page.getByRole('status')).toContainText('File save failed — local edit preserved');
+	await expectEditorMarkdown(page, '# Local notes\n\nKeep recovery\n\n');
+
+	await openOrganizer(page);
+	await page.locator('#notes-list .note-link').first().click();
+	await expectEditorMarkdown(page, '');
+	await openOrganizer(page);
+	await page.getByRole('button', { name: 'failing-local-notes.md', exact: true }).click();
+	await expectEditorMarkdown(page, '# Local notes\n\nKeep recovery\n\n');
+});
+
 test('explicit save commits a note and reload restores only committed text', async ({ page }) => {
-	await saveThought(page, 'First saved thought', 'First saved thought');
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await replaceEditorText(editor, 'First saved thought');
+	await expectEditorMarkdown(page, 'First saved thought\n');
+	await page.getByRole('textbox', { name: 'Note title' }).fill('First saved thought');
+	await page.getByRole('button', { name: 'Save thought' }).click();
+	await expect(page.getByRole('status')).toContainText('Thought saved to server');
 	await openOrganizer(page);
 	await expect(page.getByRole('button', { name: 'First saved thought', exact: true })).toBeVisible();
 
 	await page.reload();
 	await expectEditorMarkdown(page, 'First saved thought\n');
+});
+
+test('the Save thought control stays visible while a long note scrolls', async ({ page }) => {
+	const editor = page.getByRole('textbox', { name: 'Continuous note' });
+	await replaceEditorText(editor, Array.from({ length: 80 }, (_, index) => `Line ${index + 1}`).join('\n'));
+	const saveThought = page.getByRole('button', { name: 'Save thought' });
+	const viewport = page.viewportSize();
+	const initialBox = await saveThought.boundingBox();
+
+	expect(viewport).not.toBeNull();
+	expect(initialBox).not.toBeNull();
+	expect(initialBox!.y).toBeGreaterThanOrEqual(0);
+	expect(initialBox!.y + initialBox!.height).toBeLessThanOrEqual(viewport!.height);
+
+	await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+	await expect.poll(async () => (await saveThought.boundingBox())?.y).toBe(initialBox!.y);
+});
+
+test('the Save thought status bar does not overlap a visible PWA update prompt', async ({ page }) => {
+	await page.evaluate(() => {
+		const prompt = document.createElement('aside');
+		prompt.className = 'pwa-update-prompt';
+		prompt.innerHTML = '<strong>AgenticScribe update ready</strong><span>A newer version is ready.</span><div><button>Update AgenticScribe</button><button>Later</button></div>';
+		document.body.append(prompt);
+	});
+
+	const captureBox = await page.locator('.capture-state').boundingBox();
+	const promptBox = await page.locator('.pwa-update-prompt').boundingBox();
+	expect(captureBox).not.toBeNull();
+	expect(promptBox).not.toBeNull();
+	expect(promptBox!.y + promptBox!.height).toBeLessThanOrEqual(captureBox!.y);
 });
 
 test('the organizer stays pinned while a long note scrolls', async ({ page }) => {

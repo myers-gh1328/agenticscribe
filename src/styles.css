@@ -1136,14 +1136,14 @@ body {
 }
 
 .capture-state {
-	position: absolute;
+	position: fixed;
 	z-index: 2;
-	left: 50%;
+	left: calc(50vw + 138px);
 	bottom: 18px;
 	display: flex;
 	align-items: center;
 	gap: 9px;
-	width: min(calc(100% - 32px), 872px);
+	width: min(calc(100vw - 308px), 872px);
 	transform: translateX(-50%);
 	color: var(--muted);
 	font: 12px/1.2 ui-monospace, 'Cascadia Mono', monospace;
@@ -1292,7 +1292,8 @@ body {
 	}
 
 	.capture-state {
-		bottom: 12px;
+		left: 50%;
+		bottom: calc(12px + env(safe-area-inset-bottom));
 		width: calc(100% - 28px);
 	}
 
@@ -1324,7 +1325,7 @@ body {
 .pwa-update-prompt {
 	position: fixed;
 	right: 18px;
-	bottom: 18px;
+	bottom: calc(64px + env(safe-area-inset-bottom));
 	z-index: 100;
 	display: grid;
 	gap: 8px;
@@ -1383,7 +1384,7 @@ body {
 @media (max-width: 600px) {
 	.pwa-update-prompt {
 		right: 10px;
-		bottom: 10px;
+		bottom: calc(64px + env(safe-area-inset-bottom));
 		width: calc(100vw - 20px);
 	}
 }

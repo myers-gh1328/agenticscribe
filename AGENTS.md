@@ -43,8 +43,8 @@ AgenticScribe is an offline-capable, self-hosted notes application.
 
 Do not reintroduce the old prototype assumptions that IndexedDB is the only
 store, the browser owns the model endpoint, or the app is only a static site.
-Enter explicitly saves the current thought and triggers enabled cleanup;
-Shift+Enter inserts a line break without saving.
+Enter explicitly saves the current thought, triggers enabled cleanup, and starts
+a new line; Shift+Enter inserts a line break without saving.
 
 ## Repository Map
 

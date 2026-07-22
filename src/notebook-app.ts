@@ -846,12 +846,15 @@ renderFolders();
 openMarkdown.hidden = !supportsLocalMarkdownFiles();
 renderLocalFiles();
 
-function commitEditor() {
+function commitEditor(submittedValue?: string) {
 	const note = activeNote();
 	if (activeLocal) {
 		const local = activeLocal;
-		const submittedText = editor.value.endsWith('\n') ? editor.value : `${editor.value}\n`;
-		editor.value = submittedText;
+		const currentDraft = editor.value.endsWith('\n') ? editor.value : `${editor.value}\n`;
+		const submittedText = submittedValue === undefined
+			? currentDraft
+			: submittedValue.endsWith('\n') ? submittedValue : `${submittedValue}\n`;
+		if (submittedValue === undefined && editor.value !== submittedText) editor.value = submittedText;
 		editor.disabled = true;
 		state.classList.remove('saved');
 		stateText.textContent = agentSetup.agent && agentSetup.automaticCleanupEnabled
@@ -863,15 +866,21 @@ function commitEditor() {
 				? (thought) => agentSetup.agent!.cleanThought(thought)
 				: undefined
 		).then((result) => {
-			editor.value = result.text;
+			const unsavedSuffix = currentDraft.startsWith(submittedText)
+				? currentDraft.slice(submittedText.length)
+				: '';
+			const updatedDraft = `${result.text}${unsavedSuffix}`;
+			editor.value = updatedDraft;
 			local.binding.text = result.text;
-			local.binding.recoveryText = null;
+			local.binding.recoveryText = unsavedSuffix ? updatedDraft : null;
+			if (unsavedSuffix) void localMarkdownStore.saveRecovery(local.binding.id, updatedDraft);
 			state.classList.add('saved');
 			stateText.textContent = result.cleanup === 'failed'
 				? 'Cleanup failed — original saved to local file'
 				: 'Saved to local file';
-		}).catch((error) => {
-			local.binding.recoveryText = submittedText;
+		}).catch(async (error) => {
+			local.binding.recoveryText = currentDraft;
+			await localMarkdownStore.saveRecovery(local.binding.id, currentDraft);
 			state.classList.remove('saved');
 			stateText.textContent = error instanceof LocalMarkdownConflictError
 				? 'File changed elsewhere — local edit preserved'
@@ -886,12 +895,15 @@ function commitEditor() {
 		return;
 	}
 	if (!note) return;
-	const submittedText = editor.value.endsWith('\n') ? editor.value : `${editor.value}\n`;
-	editor.value = submittedText;
-	drafts.set(note.id, submittedText);
+	const currentDraft = editor.value.endsWith('\n') ? editor.value : `${editor.value}\n`;
+	const submittedText = submittedValue === undefined
+		? currentDraft
+		: submittedValue.endsWith('\n') ? submittedValue : `${submittedValue}\n`;
+	if (submittedValue === undefined && editor.value !== submittedText) editor.value = submittedText;
+	drafts.set(note.id, currentDraft);
 	fitEditor();
 	void (async () => {
-		await store.saveDraft(note.id, submittedText, note.location);
+		await store.saveDraft(note.id, currentDraft, note.location);
 		const thoughtId = `thought-${crypto.randomUUID()}`;
 		const submitted = appendThought(note.savedText, note.thoughts, submittedText, thoughtId);
 		note.savedText = submittedText;
@@ -914,13 +926,13 @@ function commitEditor() {
 	})();
 }
 
+let pendingEnterSubmission: string | undefined;
 editor.addEventListener('keydown', (event) => {
 	if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.repeat) return;
-	event.preventDefault();
-	commitEditor();
+	pendingEnterSubmission = editor.value;
 });
 
-saveThought.addEventListener('click', commitEditor);
+saveThought.addEventListener('click', () => commitEditor());
 noteTitleDisplay.addEventListener('change', () => {
 	const note = activeNote();
 	if (!note || activeLocal) return;
@@ -1116,12 +1128,15 @@ exportDistilledText.addEventListener('click', () => {
 });
 
 editor.addEventListener('input', () => {
+	const submittedText = pendingEnterSubmission;
+	pendingEnterSubmission = undefined;
 	if (activeLocal) {
 		activeLocal.binding.recoveryText = editor.value;
 		void localMarkdownStore.saveRecovery(activeLocal.binding.id, editor.value);
 		renderNoteTitle();
 		renderLocalFiles();
 		fitEditor();
+		if (submittedText !== undefined) commitEditor(submittedText);
 		return;
 	}
 	const note = activeNote();
@@ -1131,6 +1146,7 @@ editor.addEventListener('input', () => {
 	}
 	renderNotes();
 	fitEditor();
+	if (submittedText !== undefined) commitEditor(submittedText);
 });
 
 newNote.addEventListener('click', createNewNote);
